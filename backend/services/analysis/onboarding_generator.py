@@ -85,18 +85,13 @@ class OnboardingGenerator:
             scc_mods.sort(key=lambda m: m.name)
             ordered_modules.extend(scc_mods)
             
-        # 5. Build Steps
+        # 5. Build a quick lookup: module_id -> module
+        module_lookup = {mod.id: mod for mod in ordered_modules}
+        
+        # 6. Build Steps
         steps = []
         for idx, mod in enumerate(ordered_modules):
-            # Generate a helpful reason
-            if idx == 0:
-                reason = "Start here. This is a foundational module with no internal dependencies." if strategy == "bottom_up" else "Start here. This is an entry-point module that ties the system together."
-            else:
-                dep_count = len(mod.dependencies)
-                if dep_count == 0:
-                    reason = "Standalone utility or foundational module."
-                else:
-                    reason = f"Depends on {dep_count} other modules."
+            reason = self._generate_reason(idx, mod, ordered_modules, module_lookup, strategy)
                     
             steps.append(OnboardingStep(
                 module_id=mod.id,
@@ -106,3 +101,67 @@ class OnboardingGenerator:
             ))
 
         return steps
+
+    def _generate_reason(
+        self, idx: int, mod: ArchitectureModule, 
+        ordered: List[ArchitectureModule],
+        lookup: Dict[str, 'ArchitectureModule'],
+        strategy: str
+    ) -> str:
+        """Generate a context-aware reason for why this module appears at this position."""
+        dep_names = []
+        for dep_id in mod.dependencies:
+            dep_mod = lookup.get(dep_id)
+            if dep_mod:
+                dep_names.append(dep_mod.name)
+        
+        # Identify who depends on this module (dependents)
+        dependent_names = []
+        for other in ordered:
+            if mod.id in other.dependencies:
+                dep_other = lookup.get(other.id)
+                if dep_other:
+                    dependent_names.append(dep_other.name)
+        
+        file_count = len(mod.files)
+        core = mod.core_file.split("/")[-1] if mod.core_file else None
+        
+        parts = []
+        
+        # Position-based intro
+        if idx == 0:
+            if strategy == "bottom_up":
+                parts.append("Start here — this is a foundational module with no internal dependencies.")
+            else:
+                parts.append("Start here — this is a top-level entry point that orchestrates the system.")
+        elif idx <= 2:
+            parts.append("Read this early — it's a low-level building block used by many other modules.")
+        
+        # Core file hint
+        if core:
+            parts.append(f"Focus on `{core}` as the main entry point ({file_count} file{'s' if file_count != 1 else ''} total).")
+        else:
+            parts.append(f"Contains {file_count} file{'s' if file_count != 1 else ''}.")
+
+        # Dependency reasoning
+        if dep_names:
+            if len(dep_names) <= 3:
+                names_str = ", ".join(dep_names)
+                parts.append(f"Builds on top of: {names_str}. Read those first to understand how this module works.")
+            else:
+                names_str = ", ".join(dep_names[:3])
+                parts.append(f"Depends on {len(dep_names)} modules including {names_str}.")
+        else:
+            if idx > 0:
+                parts.append("This is a standalone module with no internal dependencies — safe to read independently.")
+        
+        # Why it matters (dependents)
+        if dependent_names:
+            if len(dependent_names) <= 3:
+                dep_str = ", ".join(dependent_names)
+                parts.append(f"Understanding this unlocks: {dep_str}.")
+            else:
+                dep_str = ", ".join(dependent_names[:2])
+                parts.append(f"Critical module — {len(dependent_names)} other modules depend on it, including {dep_str}.")
+        
+        return " ".join(parts)

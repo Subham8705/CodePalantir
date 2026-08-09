@@ -185,19 +185,64 @@ def get_onboarding_path(db: Session = Depends(get_db)):
     # Sort by step order
     steps = sorted(repo.onboarding_steps, key=lambda x: x.step_order)
     
-    for step in steps:
-        # Calculate estimated time (naive: 5 mins per step + some randomness)
-        mins = 5 + (step.step_order % 5)
+    # Build a lookup for module names
+    module_lookup = {m.id: m for m in repo.modules}
+    
+    for i, step in enumerate(steps):
+        module = module_lookup.get(step.module_id)
+        file_count = len(module.files) if module and module.files else 0
         
-        # Generate some tasks (at least one for the core file)
+        # Calculate estimated time based on file count
+        mins = max(5, file_count * 3)
+        
+        # Generate file-specific tasks
         tasks = []
         if step.core_file:
+            core_name = step.core_file.split('/')[-1]
             tasks.append({
                 "id": f"{step.id}-1",
-                "title": f"Review {step.core_file.split('/')[-1]}",
-                "description": "This is the core entry point for this module.",
+                "title": f"Read {core_name}",
+                "description": f"This is the core entry point for the {step.module_name} module.",
                 "completed": False
             })
+        
+        # Prerequisite names (previous steps this depends on)
+        prerequisites = []
+        if module and module.dependencies:
+            for dep_id in module.dependencies[:3]:
+                dep_mod = module_lookup.get(dep_id)
+                if dep_mod:
+                    prerequisites.append(dep_mod.name)
+        
+        # Generate why-next based on what comes after
+        if i < len(steps) - 1:
+            next_step = steps[i + 1]
+            why_next = f"Next up is {next_step.module_name}, which builds on concepts from this module."
+        else:
+            why_next = "This is the final module in the onboarding path. After this, you'll have a solid understanding of the entire codebase."
+            
+        # Learning objective
+        core_name = step.core_file.split('/')[-1] if step.core_file else step.module_name
+        learning_obj = f"Understand how `{core_name}` works and its role in the {step.module_name} module."
+        
+        # Before you start
+        before = []
+        if prerequisites:
+            before.append(f"Complete the {', '.join(prerequisites)} module(s) first")
+        before.append("Read the core file")
+        
+        # AI explanation based on module position and connectivity
+        dep_count = len(module.dependencies) if module and module.dependencies else 0
+        if dep_count == 0:
+            ai_explanation = f"This is an independent module with {file_count} files. It doesn't depend on other internal modules, making it a great starting point for understanding the codebase."
+        elif dep_count <= 2:
+            dep_names = [module_lookup.get(d, type('', (), {'name': 'Unknown'})).name for d in module.dependencies[:2]]
+            ai_explanation = f"This module integrates with {', '.join(dep_names)}. Understanding those dependencies first will help you see how {step.module_name} fits into the larger architecture."
+        else:
+            ai_explanation = f"This is a high-connectivity module with {dep_count} dependencies and {file_count} files. It acts as a coordination point in the architecture."
+
+        # Files to read
+        files = list(module.files[:5]) if module and module.files else ([step.core_file] if step.core_file else [])
             
         result.append(schemas.OnboardingStepSchema(
             id=str(step.id),
@@ -207,13 +252,13 @@ def get_onboarding_path(db: Session = Depends(get_db)):
             description=step.reason,
             estimatedTime=f"{mins} mins",
             estimatedMinutes=mins,
-            prerequisites=[],
-            whyNext=f"You need to understand {step.module_name} to proceed.",
-            files=[step.core_file] if step.core_file else [],
-            learningObjective=f"Master the {step.module_name} module.",
-            beforeYouStart=["Read the core file"],
+            prerequisites=prerequisites,
+            whyNext=why_next,
+            files=files,
+            learningObjective=learning_obj,
+            beforeYouStart=before,
             whyItMatters=step.reason,
-            aiExplanation="This module is central to the functionality.",
+            aiExplanation=ai_explanation,
             completed=False
         ))
     return result

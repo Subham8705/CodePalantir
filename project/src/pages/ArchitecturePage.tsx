@@ -1,16 +1,14 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import * as d3 from 'd3-force';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  ReactFlow, Controls, Background, MiniMap, addEdge,
-  type Node, type Edge, type Connection, type NodeChange, applyNodeChanges,
-  MarkerType, ReactFlowProvider,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+import * as d3Force from 'd3-force';
+import * as d3Zoom from 'd3-zoom';
+import * as d3Drag from 'd3-drag';
+import * as d3Selection from 'd3-selection';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Filter, RotateCcw, Maximize, Eye, EyeOff, X, ArrowRight,
+  Search, Filter, RotateCcw, Eye, EyeOff, X, ArrowRight,
   Bot, Network, FileCode, GitBranch, Users, Layers,
+  ZoomIn, ZoomOut, Maximize,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -29,173 +27,398 @@ const layerColors: Record<Layer, string> = {
 };
 
 const layerOrder: Layer[] = ['Frontend', 'API', 'Service', 'Data', 'Database'];
-
 const layers: (Layer | 'All')[] = ['All', 'Frontend', 'API', 'Service', 'Data', 'Database'];
 
-interface ModuleNodeData {
+// ─── D3 Force Graph Component ───────────────────────────────────────────────
+interface D3Node {
+  id: string;
   label: string;
   layer: Layer;
   fileCount: number;
   dependencyCount: number;
   moduleId: string;
-  [key: string]: unknown;
+  x: number;
+  y: number;
+  vx?: number;
+  vy?: number;
+  fx?: number | null;
+  fy?: number | null;
 }
 
-function createNodes(mockArchitectureNodes: any[]): Node<ModuleNodeData>[] {
-  return mockArchitectureNodes.map((n) => {
-    // Initial random positions near center
-    const x = 400 + (Math.random() - 0.5) * 400;
-    const y = 300 + (Math.random() - 0.5) * 400;
-    
-    return {
-      id: n.id,
-      type: 'moduleNode',
-      position: { x, y },
-      data: {
-        label: n.label,
-        layer: n.layer,
-        fileCount: n.fileCount,
-        dependencyCount: n.dependencyCount,
-        moduleId: n.moduleId,
-      },
-    };
-  });
+interface D3Link {
+  source: string | D3Node;
+  target: string | D3Node;
+  type: string;
 }
 
-function createEdges(showExternal: boolean, mockArchitectureEdges: any[]): Edge[] {
-  return mockArchitectureEdges
-    .filter((e) => showExternal || e.type === 'internal')
-    .map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      type: 'smoothstep',
-      animated: e.type === 'external',
-      style: { stroke: e.type === 'external' ? '#F59E0B55' : '#30363D', strokeWidth: 1.5 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#3B82F6' },
-    }));
-}
-
-function ModuleNode({ data, selected }: { data: ModuleNodeData; selected: boolean }) {
-  const color = layerColors[data.layer] || layerColors.Service;
-  return (
-    <div className="flex flex-col items-center justify-center relative group">
-      <div 
-        className="w-14 h-14 rounded-full flex items-center justify-center transition-all border-4 shadow-lg cursor-pointer"
-        style={{
-          backgroundColor: selected ? color + '40' : color + '20',
-          borderColor: selected ? color : color + '80',
-          boxShadow: selected ? `0 0 20px ${color}80` : `0 4px 12px ${color}30`,
-        }}
-      >
-        <div className="w-6 h-6 rounded-full opacity-80" style={{ backgroundColor: color }} />
-      </div>
-      <div className="absolute top-16 mt-2 px-2.5 py-1 bg-[#111827] border border-[#21262D] rounded-lg text-xs font-semibold text-white whitespace-nowrap shadow-xl z-50">
-        {data.label}
-        <div className="text-[9px] text-gray-500 font-normal mt-0.5 text-center uppercase tracking-wider">{data.layer}</div>
-      </div>
-    </div>
-  );
-}
-
-const nodeTypes = { moduleNode: ModuleNode };
-
-function ArchitectureFlow({ search, layerFilter, showExternal, onNodeClick, selectedNode, mockArchitectureNodes, mockArchitectureEdges }: {
+function ForceGraph({
+  nodes: rawNodes,
+  edges: rawEdges,
+  search,
+  layerFilter,
+  showExternal,
+  onNodeClick,
+  selectedNode,
+}: {
+  nodes: any[];
+  edges: any[];
   search: string;
   layerFilter: Layer | 'All';
   showExternal: boolean;
   onNodeClick: (id: string) => void;
   selectedNode: string | null;
-  mockArchitectureNodes: any[];
-  mockArchitectureEdges: any[];
 }) {
-  const [nodes, setNodes] = useState<Node<ModuleNodeData>[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
-  const [, setRfInstance] = useState<unknown>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const gRef = useRef<SVGGElement>(null);
+  const simulationRef = useRef<d3Force.Simulation<D3Node, D3Link> | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
-  useEffect(() => {
-    const rawNodes = createNodes(mockArchitectureNodes);
-    const rawEdges = createEdges(showExternal, mockArchitectureEdges);
-    
-    // Filter nodes first
-    const fNodes = rawNodes.map((n) => {
-      const matchesSearch = !search || n.data.label.toLowerCase().includes(search.toLowerCase());
-      const matchesLayer = layerFilter === 'All' || n.data.layer === layerFilter;
-      return {
-        ...n,
-        hidden: !matchesSearch || !matchesLayer,
-        selected: n.id === selectedNode,
-      };
+  // Filter nodes
+  const filteredNodes = useMemo(() => {
+    return rawNodes.filter((n: any) => {
+      const matchesSearch = !search || n.label.toLowerCase().includes(search.toLowerCase());
+      const matchesLayer = layerFilter === 'All' || n.layer === layerFilter;
+      return matchesSearch && matchesLayer;
     });
+  }, [rawNodes, search, layerFilter]);
 
-    const visibleNodes = fNodes.filter(n => !n.hidden);
-    
-    // Create D3 forces
-    const d3Nodes = visibleNodes.map(n => ({ ...n, x: n.position.x, y: n.position.y }));
-    const d3Links = rawEdges.map(e => ({ source: e.source, target: e.target, id: e.id }));
+  const filteredNodeIds = useMemo(() => new Set(filteredNodes.map((n: any) => n.id)), [filteredNodes]);
 
-    const simulation = d3.forceSimulation(d3Nodes as any)
-      .force('charge', d3.forceManyBody().strength(-800))
-      .force('center', d3.forceCenter(400, 300))
-      .force('collide', d3.forceCollide().radius(70))
-      .force('link', d3.forceLink(d3Links as any).id((d: any) => d.id).distance(200))
-      .stop();
+  // Filter edges
+  const filteredEdges = useMemo(() => {
+    return rawEdges
+      .filter((e: any) => showExternal || e.type === 'internal')
+      .filter((e: any) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target));
+  }, [rawEdges, showExternal, filteredNodeIds]);
 
-    // Run physics statically
-    for (let i = 0; i < 200; i++) {
-      simulation.tick();
+  // Connected nodes for hover highlighting
+  const connectedNodes = useMemo(() => {
+    if (!hoveredNode) return new Set<string>();
+    const connected = new Set<string>([hoveredNode]);
+    filteredEdges.forEach((e: any) => {
+      const src = typeof e.source === 'object' ? e.source.id : e.source;
+      const tgt = typeof e.target === 'object' ? e.target.id : e.target;
+      if (src === hoveredNode) connected.add(tgt);
+      if (tgt === hoveredNode) connected.add(src);
+    });
+    return connected;
+  }, [hoveredNode, filteredEdges]);
+
+  // Resize observer
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setDimensions({ width, height });
+      }
+    });
+    observer.observe(svg.parentElement!);
+    return () => observer.disconnect();
+  }, []);
+
+  // Main D3 effect
+  useEffect(() => {
+    const svg = d3Selection.select(svgRef.current);
+    const g = d3Selection.select(gRef.current);
+    if (!svgRef.current || !gRef.current) return;
+
+    // Stop previous simulation
+    if (simulationRef.current) {
+      simulationRef.current.stop();
     }
 
-    // Apply computed positions back
-    setNodes(fNodes.map(n => {
-      if (n.hidden) return n;
-      const computed = (d3Nodes as any).find((d: any) => d.id === n.id);
-      if (computed) {
-        return { ...n, position: { x: computed.x, y: computed.y } };
-      }
-      return n;
+    const { width, height } = dimensions;
+
+    // Create node data
+    const d3Nodes: D3Node[] = filteredNodes.map((n: any) => ({
+      id: n.id,
+      label: n.label,
+      layer: n.layer,
+      fileCount: n.fileCount,
+      dependencyCount: n.dependencyCount,
+      moduleId: n.moduleId,
+      x: width / 2 + (Math.random() - 0.5) * 300,
+      y: height / 2 + (Math.random() - 0.5) * 300,
     }));
-    
-    setEdges(rawEdges);
-  }, [mockArchitectureNodes, mockArchitectureEdges, search, layerFilter, showExternal, selectedNode]);
 
-  const filteredNodes = nodes;
-  const filteredEdges = edges;
+    const d3Links: D3Link[] = filteredEdges.map((e: any) => ({
+      source: e.source,
+      target: e.target,
+      type: e.type || 'internal',
+    }));
 
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((nds) => applyNodeChanges(changes.filter((c) => c.type !== 'select'), nds));
-    },
-    []
-  );
+    // Create simulation
+    const simulation = d3Force.forceSimulation<D3Node>(d3Nodes)
+      .force('charge', d3Force.forceManyBody().strength(-600))
+      .force('center', d3Force.forceCenter(width / 2, height / 2))
+      .force('collide', d3Force.forceCollide().radius(55))
+      .force('link', d3Force.forceLink<D3Node, D3Link>(d3Links)
+        .id((d) => d.id)
+        .distance(160)
+        .strength(0.4)
+      )
+      .force('x', d3Force.forceX(width / 2).strength(0.03))
+      .force('y', d3Force.forceY(height / 2).strength(0.03))
+      .alphaDecay(0.02);
 
-  const onConnect = useCallback((conn: Connection) => setEdges((eds) => addEdge(conn, eds)), []);
+    simulationRef.current = simulation;
+
+    // ── Draw Links ──
+    g.selectAll('.link').remove();
+    const links = g.selectAll('.link')
+      .data(d3Links)
+      .enter()
+      .append('line')
+      .attr('class', 'link')
+      .attr('stroke', (d: D3Link) => d.type === 'external' ? '#F59E0B33' : '#30363D')
+      .attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', (d: D3Link) => d.type === 'external' ? '4,4' : 'none');
+
+    // ── Draw Arrow markers ──
+    svg.select('defs').remove();
+    const defs = svg.append('defs');
+    defs.append('marker')
+      .attr('id', 'arrowhead')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 28)
+      .attr('refY', 0)
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .attr('fill', '#3B82F680');
+
+    links.attr('marker-end', 'url(#arrowhead)');
+
+    // ── Draw Node groups ──
+    g.selectAll('.node-group').remove();
+    const nodeGroups = g.selectAll('.node-group')
+      .data(d3Nodes)
+      .enter()
+      .append('g')
+      .attr('class', 'node-group')
+      .style('cursor', 'pointer');
+
+    // Outer glow circle
+    nodeGroups.append('circle')
+      .attr('r', 28)
+      .attr('fill', (d: D3Node) => (layerColors[d.layer] || '#8B5CF6') + '15')
+      .attr('stroke', (d: D3Node) => (layerColors[d.layer] || '#8B5CF6') + '50')
+      .attr('stroke-width', 2)
+      .attr('class', 'node-outer');
+
+    // Inner circle
+    nodeGroups.append('circle')
+      .attr('r', 12)
+      .attr('fill', (d: D3Node) => (layerColors[d.layer] || '#8B5CF6') + '90')
+      .attr('class', 'node-inner');
+
+    // Label
+    nodeGroups.append('text')
+      .text((d: D3Node) => d.label)
+      .attr('dy', 45)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#E5E7EB')
+      .attr('font-size', '11px')
+      .attr('font-weight', '600')
+      .attr('font-family', 'Inter, system-ui, sans-serif');
+
+    // Sub-label (layer)
+    nodeGroups.append('text')
+      .text((d: D3Node) => d.layer.toUpperCase())
+      .attr('dy', 58)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#6B7280')
+      .attr('font-size', '8px')
+      .attr('letter-spacing', '1px')
+      .attr('font-family', 'Inter, system-ui, sans-serif');
+
+    // ── Interactions ──
+    nodeGroups
+      .on('click', (_event: any, d: D3Node) => {
+        onNodeClick(d.id);
+      })
+      .on('mouseenter', (_event: any, d: D3Node) => {
+        setHoveredNode(d.id);
+      })
+      .on('mouseleave', () => {
+        setHoveredNode(null);
+      });
+
+    // ── Drag behavior ──
+    const dragBehavior = d3Drag.drag<SVGGElement, D3Node>()
+      .on('start', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      })
+      .on('drag', (event, d) => {
+        d.fx = event.x;
+        d.fy = event.y;
+      })
+      .on('end', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      });
+
+    nodeGroups.call(dragBehavior as any);
+
+    // ── Zoom behavior ──
+    const zoomBehavior = d3Zoom.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.2, 4])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform);
+      });
+
+    svg.call(zoomBehavior as any);
+
+    // Store zoom behavior on svg element for external controls
+    (svgRef.current as any).__zoom_behavior = zoomBehavior;
+
+    // Initial fit
+    svg.call(zoomBehavior.transform as any, d3Zoom.zoomIdentity.translate(0, 0).scale(0.9));
+
+    // ── Tick ──
+    simulation.on('tick', () => {
+      links
+        .attr('x1', (d: any) => d.source.x)
+        .attr('y1', (d: any) => d.source.y)
+        .attr('x2', (d: any) => d.target.x)
+        .attr('y2', (d: any) => d.target.y);
+
+      nodeGroups.attr('transform', (d: D3Node) => `translate(${d.x},${d.y})`);
+    });
+
+    return () => {
+      simulation.stop();
+    };
+  }, [filteredNodes, filteredEdges, dimensions, onNodeClick]);
+
+  // Update visuals on hover/selection changes (without restarting simulation)
+  useEffect(() => {
+    const g = d3Selection.select(gRef.current);
+    if (!g.node()) return;
+
+    g.selectAll<SVGGElement, D3Node>('.node-group')
+      .each(function(d) {
+        const group = d3Selection.select(this);
+        const isHovered = hoveredNode === d.id;
+        const isSelected = selectedNode === d.id;
+        const isConnected = hoveredNode ? connectedNodes.has(d.id) : true;
+        const color = layerColors[d.layer] || '#8B5CF6';
+
+        group.select('.node-outer')
+          .transition().duration(200)
+          .attr('r', isHovered || isSelected ? 32 : 28)
+          .attr('fill', isSelected ? color + '40' : isHovered ? color + '30' : color + '15')
+          .attr('stroke', isSelected ? color : isHovered ? color + '90' : color + '50')
+          .attr('stroke-width', isSelected || isHovered ? 3 : 2)
+          .style('opacity', isConnected ? 1 : 0.2);
+
+        group.select('.node-inner')
+          .transition().duration(200)
+          .attr('r', isHovered || isSelected ? 14 : 12)
+          .style('opacity', isConnected ? 1 : 0.2);
+
+        group.selectAll('text')
+          .transition().duration(200)
+          .style('opacity', isConnected ? 1 : 0.15);
+      });
+
+    // Update link opacity
+    g.selectAll<SVGLineElement, D3Link>('.link')
+      .transition().duration(200)
+      .attr('stroke', (d: any) => {
+        if (!hoveredNode) return d.type === 'external' ? '#F59E0B33' : '#30363D';
+        const src = typeof d.source === 'object' ? d.source.id : d.source;
+        const tgt = typeof d.target === 'object' ? d.target.id : d.target;
+        if (src === hoveredNode || tgt === hoveredNode) {
+          return layerColors[(d.source as D3Node).layer] || '#3B82F6';
+        }
+        return '#30363D20';
+      })
+      .attr('stroke-width', (d: any) => {
+        if (!hoveredNode) return 1.5;
+        const src = typeof d.source === 'object' ? d.source.id : d.source;
+        const tgt = typeof d.target === 'object' ? d.target.id : d.target;
+        return (src === hoveredNode || tgt === hoveredNode) ? 2.5 : 0.5;
+      });
+
+  }, [hoveredNode, selectedNode, connectedNodes]);
+
+  // Zoom controls
+  const handleZoomIn = () => {
+    const svg = d3Selection.select(svgRef.current);
+    const zoomBehavior = (svgRef.current as any)?.__zoom_behavior;
+    if (zoomBehavior) svg.transition().duration(300).call(zoomBehavior.scaleBy, 1.3);
+  };
+  const handleZoomOut = () => {
+    const svg = d3Selection.select(svgRef.current);
+    const zoomBehavior = (svgRef.current as any)?.__zoom_behavior;
+    if (zoomBehavior) svg.transition().duration(300).call(zoomBehavior.scaleBy, 0.7);
+  };
+  const handleFitView = () => {
+    const svg = d3Selection.select(svgRef.current);
+    const zoomBehavior = (svgRef.current as any)?.__zoom_behavior;
+    if (zoomBehavior) {
+      svg.transition().duration(500).call(
+        zoomBehavior.transform,
+        d3Zoom.zoomIdentity.translate(dimensions.width * 0.05, dimensions.height * 0.05).scale(0.9)
+      );
+    }
+  };
 
   return (
-    <ReactFlow
-      nodes={filteredNodes}
-      edges={filteredEdges}
-      nodeTypes={nodeTypes}
-      onNodesChange={onNodesChange}
-      onConnect={onConnect}
-      onInit={setRfInstance}
-      onNodeClick={(_, node) => onNodeClick(node.id)}
-      fitView
-      fitViewOptions={{ padding: 0.2, maxZoom: 1.2 }}
-      minZoom={0.3}
-      maxZoom={2.5}
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background color="#1A1F27" gap={20} />
-      <Controls showInteractive={false} />
-      <MiniMap
-        nodeColor={(n) => layerColors[(n.data as ModuleNodeData)?.layer || 'Frontend']}
-        maskColor="rgba(8,11,18,0.7)"
-      />
-    </ReactFlow>
+    <div className="relative w-full h-full">
+      <svg
+        ref={svgRef}
+        className="w-full h-full"
+        style={{ background: 'transparent' }}
+      >
+        <g ref={gRef} />
+      </svg>
+
+      {/* Zoom Controls */}
+      <div className="absolute top-4 right-4 flex flex-col gap-1">
+        <button
+          onClick={handleZoomIn}
+          className="w-8 h-8 flex items-center justify-center bg-bg-elevated/90 border border-border rounded-lg text-gray-400 hover:text-white hover:border-primary-500/50 transition-all backdrop-blur-sm"
+          title="Zoom In"
+        >
+          <ZoomIn size={14} />
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="w-8 h-8 flex items-center justify-center bg-bg-elevated/90 border border-border rounded-lg text-gray-400 hover:text-white hover:border-primary-500/50 transition-all backdrop-blur-sm"
+          title="Zoom Out"
+        >
+          <ZoomOut size={14} />
+        </button>
+        <button
+          onClick={handleFitView}
+          className="w-8 h-8 flex items-center justify-center bg-bg-elevated/90 border border-border rounded-lg text-gray-400 hover:text-white hover:border-primary-500/50 transition-all backdrop-blur-sm"
+          title="Fit to View"
+        >
+          <Maximize size={14} />
+        </button>
+      </div>
+
+      {/* Node count */}
+      <div className="absolute bottom-4 right-4 text-xs text-gray-600 bg-bg-elevated/60 px-2 py-1 rounded backdrop-blur-sm">
+        {filteredNodes.length} modules · {filteredEdges.length} connections
+      </div>
+    </div>
   );
 }
 
+
+// ─── Main Page ──────────────────────────────────────────────────────────────
 export function ArchitecturePage() {
   const { mockArchitectureNodes, mockArchitectureEdges, mockModules, mockContributors } = useApi();
 
@@ -212,7 +435,7 @@ export function ArchitecturePage() {
     const node = mockArchitectureNodes.find((n) => n.id === selectedNodeId);
     if (!node) return null;
     return mockModules.find((m) => m.id === node.moduleId) || null;
-  }, [selectedNodeId]);
+  }, [selectedNodeId, mockArchitectureNodes, mockModules]);
 
   const handleNodeClick = (id: string) => {
     setSelectedNodeId(id);
@@ -272,19 +495,17 @@ export function ArchitecturePage() {
         </button>
       </div>
 
-      {/* Flow */}
+      {/* Graph */}
       <div className="flex-1 relative">
-        <ReactFlowProvider>
-          <ArchitectureFlow
-            search={search}
-            layerFilter={layerFilter}
-            showExternal={showExternal}
-            onNodeClick={handleNodeClick}
-            selectedNode={selectedNodeId}
-            mockArchitectureNodes={mockArchitectureNodes}
-            mockArchitectureEdges={mockArchitectureEdges}
-          />
-        </ReactFlowProvider>
+        <ForceGraph
+          nodes={mockArchitectureNodes}
+          edges={mockArchitectureEdges}
+          search={search}
+          layerFilter={layerFilter}
+          showExternal={showExternal}
+          onNodeClick={handleNodeClick}
+          selectedNode={selectedNodeId}
+        />
 
         {/* Legend */}
         <div className="absolute bottom-4 left-4 card p-3 space-y-1.5">
