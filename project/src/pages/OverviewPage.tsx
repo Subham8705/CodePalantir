@@ -16,14 +16,7 @@ const statCards = [
   { label: 'Contributors', value: '14', icon: Users, color: 'text-success-400', bg: 'bg-success-500/10' },
 ];
 
-const recentActivity = [
-  { type: 'commit', message: 'Refactor token refresh logic', author: 'Alex Morgan', module: 'Authentication', time: '2h ago' },
-  { type: 'merge', message: 'Merged feature/auth-refactor into main', author: 'Alex Morgan', module: 'Authentication', time: '5h ago' },
-  { type: 'commit', message: 'Add analytics aggregation job', author: 'Sam Lee', module: 'Analytics', time: '3h ago' },
-  { type: 'commit', message: 'Redesign notification dropdown', author: 'Maya Chen', module: 'Notifications', time: '1h ago' },
-  { type: 'commit', message: 'Add database migration for v2.4', author: 'Daniel Kim', module: 'Database', time: '30m ago' },
-  { type: 'review', message: 'Approved PR #234: Add payment retry', author: 'Alex Morgan', module: 'Payments', time: '5h ago' },
-];
+
 
 export function OverviewPage() {
   const { mockRepository, mockModules, mockContributors, mockOnboardingSteps } = useApi();
@@ -62,7 +55,12 @@ export function OverviewPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {statCards.map((stat, i) => (
+        {[
+          { label: 'Files', value: mockRepository.stats.files.toString(), icon: FileCode, color: 'text-primary-400', bg: 'bg-primary-500/10' },
+          { label: 'Functions', value: mockRepository.stats.functions.toString(), icon: FunctionSquare, color: 'text-secondary-400', bg: 'bg-secondary-500/10' },
+          { label: 'Modules', value: mockRepository.stats.modules.toString(), icon: Boxes, color: 'text-accent-400', bg: 'bg-accent-500/10' },
+          { label: 'Contributors', value: mockRepository.stats.contributors.toString(), icon: Users, color: 'text-success-400', bg: 'bg-success-500/10' },
+        ].map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 12 }}
@@ -161,10 +159,10 @@ export function OverviewPage() {
             <Activity size={16} className="text-gray-600" />
           </div>
           <div className="space-y-0.5">
-            {recentActivity.map((activity, i) => (
+            {mockRepository.recentActivity?.map((activity, i) => (
               <div key={i} className="flex items-start gap-3 py-2.5 px-2 rounded-lg hover:bg-bg-hover transition-colors">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-[10px] font-semibold text-white flex-shrink-0">
-                  {activity.author.split(' ').map((n) => n[0]).join('')}
+                  {activity.author?.split(' ').map((n: string) => n[0]).join('').substring(0,2) || 'U'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-gray-200">

@@ -31,7 +31,7 @@ const API_BASE_URL = 'http://127.0.0.1:8000/api';
 const defaultRepository: Repository = {
   id: '', name: 'Loading...', owner: '', url: '', description: '', branch: '', branches: [], lastAnalyzed: '',
   stats: { files: 0, functions: 0, modules: 0, contributors: 0 },
-  languages: [], frameworks: []
+  languages: [], frameworks: [], recentActivity: []
 };
 
 const defaultFileTree: FileNode = {

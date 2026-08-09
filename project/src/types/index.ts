@@ -112,6 +112,7 @@ export interface Repository {
   };
   languages: { name: string; percentage: number; color: string }[];
   frameworks: string[];
+  recentActivity?: any[];
 }
 
 export interface ChatMessage {

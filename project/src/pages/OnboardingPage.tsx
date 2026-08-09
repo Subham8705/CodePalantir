@@ -93,7 +93,7 @@ export function OnboardingPage() {
 
                       <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
                         <span className="flex items-center gap-1 text-gray-500"><Clock size={12} /> {step.estimatedTime}</span>
-                        {step.prerequisites.length > 0 && (
+                        {step.prerequisites && step.prerequisites.length > 0 && (
                           <span className="flex items-center gap-1 text-gray-500">
                             <BookOpen size={12} /> Prerequisite: {step.prerequisites.join(', ')}
                           </span>
@@ -245,7 +245,7 @@ export function OnboardingPage() {
                 <div>
                   <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Before You Start</h3>
                   <ul className="space-y-1.5">
-                    {selectedStep.beforeYouStart.map((item) => (
+                    {selectedStep.beforeYouStart?.map((item) => (
                       <li key={item} className="flex items-center gap-2 text-sm text-gray-300">
                         <Check size={14} className="text-success-400 flex-shrink-0" /> {item}
                       </li>
@@ -256,7 +256,7 @@ export function OnboardingPage() {
                 <div>
                   <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Files to Read</h3>
                   <div className="space-y-2">
-                    {selectedStep.files.map((file, idx) => (
+                    {selectedStep.files?.map((file, idx) => (
                       <button
                         key={file}
                         onClick={() => { setSelectedStepId(null); navigate(`/app/explorer?file=${file}`); }}

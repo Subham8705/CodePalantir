@@ -194,7 +194,7 @@ export function OwnershipPage() {
             <div>
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Primary Areas</h4>
               <div className="flex flex-wrap gap-2">
-                {selectedContributor.primaryAreas.map((area) => {
+                {selectedContributor.primaryAreas?.map((area) => {
                   const m = mockModules.find((mm) => mm.name === area);
                   return (
                     <button
@@ -212,7 +212,7 @@ export function OwnershipPage() {
             <div>
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Contribution Distribution</h4>
               <div className="space-y-2">
-                {selectedContributor.primaryAreas.map((area) => {
+                {selectedContributor.primaryAreas?.map((area) => {
                   const m = mockModules.find((mm) => mm.name === area);
                   const pct = m?.ownership[selectedContributor.id] || 0;
                   return (
@@ -233,7 +233,7 @@ export function OwnershipPage() {
             <div>
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Recent Activity</h4>
               <div className="space-y-2">
-                {selectedContributor.recentActivity.map((a) => (
+                {selectedContributor.recentActivity?.map((a) => (
                   <div key={a.id} className="flex items-start gap-2 p-2.5 rounded-lg bg-bg-elevated border border-border">
                     <div className="w-6 h-6 rounded-md bg-bg-hover flex items-center justify-center flex-shrink-0">
                       {a.type === 'commit' && <GitCommit size={12} className="text-primary-400" />}
@@ -298,7 +298,7 @@ export function OwnershipPage() {
             <div>
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Recent Contributors</h4>
               <div className="space-y-2">
-                {selectedModule.primaryContributors.map((cid) => {
+                {selectedModule.primaryContributors?.map((cid) => {
                   const c = mockContributors.find((x) => x.id === cid);
                   if (!c) return null;
                   return (
@@ -308,9 +308,9 @@ export function OwnershipPage() {
                       </div>
                       <div className="flex-1">
                         <div className="text-sm font-medium text-white">{c.name}</div>
-                        <div className="text-xs text-gray-500">{c.recentActivity[0]?.message || 'No recent activity'}</div>
+                        <div className="text-xs text-gray-500">{c.recentActivity?.[0]?.message || 'No recent activity'}</div>
                       </div>
-                      <span className="text-xs text-gray-500">{c.recentActivity[0]?.timestamp || ''}</span>
+                      <span className="text-xs text-gray-500">{c.recentActivity?.[0]?.timestamp || ''}</span>
                     </div>
                   );
                 })}

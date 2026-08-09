@@ -1,18 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import repo
-from api.routes import parse
+from api.routes import repo, parse, data
+from database.database import Base, engine
+
+# Ensure tables are created
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="CodeCompass API",
-    description="Backend API for CodeCompass Repository Analysis",
-    version="0.1.0"
+    title="CodePalantir API",
+    description="Backend services for CodePalantir repository analysis",
+    version="1.0.0"
 )
 
-# Configure CORS so the React frontend can communicate with it
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development; configure properly in production
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], # Vite frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,6 +23,7 @@ app.add_middleware(
 
 app.include_router(repo.router, prefix="/api/repo", tags=["Repository"])
 app.include_router(parse.router, prefix="/api/parse", tags=["Parsing"])
+app.include_router(data.router, prefix="/api", tags=["Data"])
 
 @app.get("/")
 def read_root():
