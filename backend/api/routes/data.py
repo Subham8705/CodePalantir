@@ -41,17 +41,21 @@ def get_repo_overview(db: Session = Depends(get_db)):
         if ext:
             extensions[ext] = extensions.get(ext, 0) + 1
             
-    langs = []
-    colors = {".py": "#3776AB", ".ts": "#3178C6", ".tsx": "#3178C6", ".js": "#F7DF1E"}
     names = {".py": "Python", ".ts": "TypeScript", ".tsx": "TypeScript", ".js": "JavaScript", ".md": "Markdown", ".json": "JSON"}
+    colors_by_name = {"Python": "#3776AB", "TypeScript": "#3178C6", "JavaScript": "#F7DF1E"}
     
-    for ext, count in sorted(extensions.items(), key=lambda x: x[1], reverse=True)[:5]:
+    lang_counts = {}
+    for ext, count in extensions.items():
+        name = names.get(ext, ext)
+        lang_counts[name] = lang_counts.get(name, 0) + count
+        
+    langs = []
+    for name, count in sorted(lang_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
         langs.append({
-            "name": names.get(ext, ext),
+            "name": name,
             "percentage": round((count / total_files) * 100),
-            "color": colors.get(ext, "#888888")
+            "color": colors_by_name.get(name, "#888888")
         })
-
     import subprocess
     recent_activity = []
     repo_path = f"cloned_repos/{repo.name.split('/')[-1] if '/' in repo.name else repo.name}"
@@ -136,13 +140,21 @@ def get_onboarding_path(db: Session = Depends(get_db)):
             })
             
         result.append(schemas.OnboardingStepSchema(
-            id=step.id,
+            id=str(step.id),
+            order=step.step_order,
+            moduleId=step.module_id,
             title=f"Understand {step.module_name}",
             description=step.reason,
-            module_id=step.module_id,
-            estimated_time=f"{mins} mins",
-            core_file=step.core_file or "",
-            tasks=tasks
+            estimatedTime=f"{mins} mins",
+            estimatedMinutes=mins,
+            prerequisites=[],
+            whyNext=f"You need to understand {step.module_name} to proceed.",
+            files=[step.core_file] if step.core_file else [],
+            learningObjective=f"Master the {step.module_name} module.",
+            beforeYouStart=["Read the core file"],
+            whyItMatters=step.reason,
+            aiExplanation="This module is central to the functionality.",
+            completed=False
         ))
     return result
 
@@ -170,15 +182,16 @@ def get_contributors(db: Session = Depends(get_db)):
     sorted_authors = sorted(authors.items(), key=lambda x: x[1]["lines"], reverse=True)
     
     for idx, (name, stats) in enumerate(sorted_authors[:10]):
-        # Mocking top modules for now
         result.append(schemas.ContributorSchema(
             id=str(idx),
             name=name,
-            avatar=f"https://ui-avatars.com/api/?name={name.replace(' ', '+')}&background=random",
+            avatar=name[:2].upper() if name else "?",
+            role="Contributor",
             commits=stats["commits"],
-            additions=stats["lines"],
-            deletions=stats["lines"] // 3, # Mock deletions
-            topModules=[]
+            filesTouched=1, # Mock
+            contributionPct=10, # Mock
+            primaryAreas=["Authentication", "API"], # Mock
+            recentActivity=[] # Mock empty list
         ))
     return result
 
@@ -195,7 +208,7 @@ def get_architecture_nodes(db: Session = Depends(get_db)):
             layer="API", # Default layer
             fileCount=len(mod.files),
             dependencyCount=len(mod.dependencies),
-            description=mod.description or "No description",
+            description=f"Core file: {mod.core_file}" if mod.core_file else "Module component",
             moduleId=mod.id
         ))
     return nodes

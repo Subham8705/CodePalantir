@@ -32,13 +32,21 @@ class ModuleSchema(BaseModel):
         from_attributes = True
 
 class OnboardingStepSchema(BaseModel):
-    id: int
+    id: str
+    order: int
+    moduleId: str
     title: str
     description: str
-    module_id: str
-    estimated_time: str
-    core_file: str
-    tasks: List[Dict[str, Any]] = []
+    estimatedTime: str
+    estimatedMinutes: int
+    prerequisites: List[str] = []
+    whyNext: str = ""
+    files: List[str] = []
+    learningObjective: str = ""
+    beforeYouStart: List[str] = []
+    whyItMatters: str = ""
+    aiExplanation: str = ""
+    completed: bool = False
     
     class Config:
         from_attributes = True
@@ -47,10 +55,12 @@ class ContributorSchema(BaseModel):
     id: str
     name: str
     avatar: str
+    role: str
     commits: int
-    additions: int
-    deletions: int
-    topModules: List[str]
+    filesTouched: int
+    contributionPct: int
+    primaryAreas: List[str]
+    recentActivity: List[Dict[str, Any]]
 
 class ArchitectureNodeSchema(BaseModel):
     id: str
