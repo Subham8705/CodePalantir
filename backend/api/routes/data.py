@@ -118,6 +118,18 @@ def get_file_content(path: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def get_layer(name: str) -> str:
+    name_lower = name.lower()
+    if any(x in name_lower for x in ["api", "route", "controller", "handler"]):
+        return "API"
+    elif any(x in name_lower for x in ["component", "page", "ui", "view", "frontend", "src", "public"]):
+        return "Frontend"
+    elif any(x in name_lower for x in ["db", "database", "model", "schema", "orm"]):
+        return "Database"
+    elif any(x in name_lower for x in ["data", "store", "cache", "state", "context"]):
+        return "Data"
+    return "Service"
+
 
 @router.get("/modules", response_model=List[schemas.ModuleSchema])
 def get_modules(db: Session = Depends(get_db)):
@@ -129,7 +141,7 @@ def get_modules(db: Session = Depends(get_db)):
             id=mod.id,
             name=mod.name,
             description=f"Core file: {mod.core_file}" if mod.core_file else "Architecture Module",
-            layer="API",
+            layer=get_layer(mod.name),
             fileCount=len(mod.files) if mod.files else 0,
             dependencies=mod.dependencies if mod.dependencies else [],
             dependents=[],
@@ -230,7 +242,7 @@ def get_architecture_nodes(db: Session = Depends(get_db)):
         nodes.append(schemas.ArchitectureNodeSchema(
             id=mod.id,
             label=mod.name,
-            layer="API", # Default layer
+            layer=get_layer(mod.name),
             fileCount=len(mod.files),
             dependencyCount=len(mod.dependencies),
             description=f"Core file: {mod.core_file}" if mod.core_file else "Module component",

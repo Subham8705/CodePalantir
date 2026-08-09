@@ -12,17 +12,17 @@ import { Drawer } from '@/components/ui/Drawer';
 import { useApi } from '@/context/ApiContext';
 
 
-const topCards = [
-  { label: 'Contributors', value: '14', icon: Users, color: 'text-primary-400', bg: 'bg-primary-500/10' },
-  { label: 'Modules', value: '32', icon: Boxes, color: 'text-secondary-400', bg: 'bg-secondary-500/10' },
-  { label: 'Single-owner modules', value: '6', icon: User, color: 'text-warning-400', bg: 'bg-warning-500/10' },
-  { label: 'Shared ownership', value: '26', icon: Users, color: 'text-success-400', bg: 'bg-success-500/10' },
-];
-
-const heatmapModules = ['Authentication', 'Payments', 'Analytics', 'Notifications', 'Database', 'Frontend', 'API'];
-
 export function OwnershipPage() {
   const { mockModules, mockContributors } = useApi();
+
+  const singleOwnerCount = mockModules.filter(m => Object.keys(m.ownership || {}).length === 1).length;
+
+  const topCards = [
+    { label: 'Contributors', value: mockContributors.length.toString(), icon: Users, color: 'text-primary-400', bg: 'bg-primary-500/10' },
+    { label: 'Modules', value: mockModules.length.toString(), icon: Boxes, color: 'text-secondary-400', bg: 'bg-secondary-500/10' },
+    { label: 'Single-owner modules', value: singleOwnerCount.toString(), icon: User, color: 'text-warning-400', bg: 'bg-warning-500/10' },
+    { label: 'Shared ownership', value: (mockModules.length - singleOwnerCount).toString(), icon: Users, color: 'text-success-400', bg: 'bg-success-500/10' },
+  ];
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -30,12 +30,10 @@ export function OwnershipPage() {
   const [moduleDrawer, setModuleDrawer] = useState<string | null>(null);
 
   const heatmapData = useMemo(() => {
-    return heatmapModules.map((moduleName) => {
-      const module = mockModules.find((m) => m.name === moduleName);
-      if (!module) return { name: moduleName, contributions: {} as Record<string, number> };
-      return { name: moduleName, moduleId: module.id, contributions: module.ownership };
+    return mockModules.map((module) => {
+      return { name: module.name, moduleId: module.id, contributions: module.ownership || {} };
     });
-  }, []);
+  }, [mockModules]);
 
   const getIntensity = (pct: number) => {
     if (pct >= 60) return 'bg-primary-500';

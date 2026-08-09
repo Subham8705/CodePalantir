@@ -8,18 +8,8 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useApi } from '@/context/ApiContext';
 
-
-const statCards = [
-  { label: 'Files', value: '247', icon: FileCode, color: 'text-primary-400', bg: 'bg-primary-500/10' },
-  { label: 'Functions', value: '1,482', icon: FunctionSquare, color: 'text-secondary-400', bg: 'bg-secondary-500/10' },
-  { label: 'Modules', value: '32', icon: Boxes, color: 'text-accent-400', bg: 'bg-accent-500/10' },
-  { label: 'Contributors', value: '14', icon: Users, color: 'text-success-400', bg: 'bg-success-500/10' },
-];
-
-
-
 export function OverviewPage() {
-  const { mockRepository, mockModules, mockContributors, mockOnboardingSteps } = useApi();
+  const { mockRepository, mockModules, mockContributors, mockOnboardingSteps, mockArchitectureNodes, mockArchitectureEdges } = useApi();
 
   const navigate = useNavigate();
   const completedSteps = mockOnboardingSteps.filter((s) => s.completed).length;
@@ -122,9 +112,9 @@ export function OverviewPage() {
       {/* Summary cards */}
       <div className="grid md:grid-cols-3 gap-4 mb-6">
         {[
-          { icon: Network, title: 'Architecture', desc: '5 layers, 32 modules, 89 internal dependencies', path: '/app/architecture', color: 'primary' },
+          { icon: Network, title: 'Architecture', desc: `${new Set(mockArchitectureNodes.map(n => n.layer)).size} layers, ${mockArchitectureNodes.length} modules, ${mockArchitectureEdges.length} dependencies`, path: '/app/architecture', color: 'primary' },
           { icon: Map, title: 'Developer Onboarding', desc: `${completedSteps}/${totalSteps} modules • ${onboardingPct.toFixed(0)}% complete`, path: '/app/onboarding', color: 'secondary' },
-          { icon: UsersIcon, title: 'Code Ownership', desc: '14 contributors, 6 single-owner modules', path: '/app/ownership', color: 'accent' },
+          { icon: UsersIcon, title: 'Code Ownership', desc: `${mockContributors.length} contributors, ${mockModules.filter(m => Object.keys(m.ownership || {}).length === 1).length} single-owner modules`, path: '/app/ownership', color: 'accent' },
         ].map((card, i) => (
           <motion.div
             key={card.title}
