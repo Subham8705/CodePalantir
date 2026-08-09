@@ -8,6 +8,22 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/context/ThemeContext';
+import { useEffect } from 'react';
+
+function useStickyState<T>(defaultValue: T, key: string): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stickyValue = window.localStorage.getItem(key);
+      return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  });
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+  return [value, setValue];
+}
 
 const sections = [
   { id: 'general', label: 'General', icon: SettingsIcon },
@@ -35,17 +51,37 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 }
 
 export function SettingsPage() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, accentColor, setAccentColor } = useTheme();
   const [activeSection, setActiveSection] = useState<SectionId>('general');
   const [temperature, setTemperature] = useState(0.7);
   const [responseStyle, setResponseStyle] = useState<'concise' | 'detailed'>('detailed');
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [includeTests, setIncludeTests] = useState(true);
-  const [includeGenerated, setIncludeGenerated] = useState(false);
-  const [notifAnalysis, setNotifAnalysis] = useState(true);
-  const [notifOwnership, setNotifOwnership] = useState(true);
-  const [notifContributor, setNotifContributor] = useState(true);
-  const [notifOnboarding, setNotifOnboarding] = useState(false);
+  
+  // General
+  const [displayName, setDisplayName] = useStickyState('Alex Morgan', 'settings_displayName');
+  const [email, setEmail] = useStickyState('alex@codecompass.dev', 'settings_email');
+  const [landingPage, setLandingPage] = useStickyState('Overview', 'settings_landingPage');
+
+  // Appearance
+  const [reduceAnimations, setReduceAnimations] = useStickyState(false, 'settings_reduceAnimations');
+
+  // Repository
+  const [defaultBranch, setDefaultBranch] = useStickyState('main', 'settings_defaultBranch');
+  const [autoRefresh, setAutoRefresh] = useStickyState(true, 'settings_autoRefresh');
+  const [includeTests, setIncludeTests] = useStickyState(true, 'settings_includeTests');
+  const [includeGenerated, setIncludeGenerated] = useStickyState(false, 'settings_includeGenerated');
+  
+  // Notifications
+  const [notifAnalysis, setNotifAnalysis] = useStickyState(true, 'settings_notifAnalysis');
+  const [notifOwnership, setNotifOwnership] = useStickyState(true, 'settings_notifOwnership');
+  const [notifContributor, setNotifContributor] = useStickyState(true, 'settings_notifContributor');
+  const [notifOnboarding, setNotifOnboarding] = useStickyState(false, 'settings_notifOnboarding');
+
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto pb-20 lg:pb-6">
@@ -87,24 +123,24 @@ export function SettingsPage() {
                     <div className="text-sm text-white">Display name</div>
                     <div className="text-xs text-gray-500">Shown in comments and activity</div>
                   </div>
-                  <input defaultValue="Alex Morgan" className="input max-w-[200px] text-sm" />
+                  <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="input max-w-[200px] text-sm" />
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-border-subtle">
                   <div>
                     <div className="text-sm text-white">Email</div>
                     <div className="text-xs text-gray-500">For notifications</div>
                   </div>
-                  <input defaultValue="alex@codecompass.dev" className="input max-w-[220px] text-sm" />
+                  <input value={email} onChange={(e) => setEmail(e.target.value)} className="input max-w-[220px] text-sm" />
                 </div>
                 <div className="flex items-center justify-between py-3">
                   <div>
                     <div className="text-sm text-white">Default landing page</div>
                     <div className="text-xs text-gray-500">Where to go after analysis</div>
                   </div>
-                  <select className="input max-w-[160px] text-sm">
-                    <option>Overview</option>
-                    <option>Architecture</option>
-                    <option>Onboarding</option>
+                  <select value={landingPage} onChange={(e) => setLandingPage(e.target.value)} className="input max-w-[160px] text-sm">
+                    <option value="Overview">Overview</option>
+                    <option value="Architecture">Architecture</option>
+                    <option value="Onboarding">Onboarding</option>
                   </select>
                 </div>
               </div>
@@ -136,10 +172,11 @@ export function SettingsPage() {
                     {['#3B82F6', '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EC4899'].map((color, i) => (
                       <button
                         key={color}
-                        className={`w-8 h-8 rounded-lg transition-all ${i === 0 ? 'ring-2 ring-offset-2 ring-offset-bg-card ring-primary-500' : 'hover:scale-110'}`}
+                        onClick={() => setAccentColor(color)}
+                        className={`w-8 h-8 rounded-lg transition-all ${accentColor === color ? 'ring-2 ring-offset-2 ring-offset-bg-card ring-primary-500' : 'hover:scale-110'}`}
                         style={{ backgroundColor: color }}
                       >
-                        {i === 0 && <Check size={14} className="text-white mx-auto" />}
+                        {accentColor === color && <Check size={14} className="text-white mx-auto" />}
                       </button>
                     ))}
                   </div>
@@ -149,7 +186,7 @@ export function SettingsPage() {
                     <div className="text-sm text-white">Reduce animations</div>
                     <div className="text-xs text-gray-500">Minimize motion for accessibility</div>
                   </div>
-                  <Toggle checked={false} onChange={() => {}} />
+                  <Toggle checked={reduceAnimations} onChange={() => setReduceAnimations(!reduceAnimations)} />
                 </div>
               </div>
             </Card>
@@ -170,10 +207,10 @@ export function SettingsPage() {
                       <div className="text-xs text-gray-500">Branch to analyze by default</div>
                     </div>
                   </div>
-                  <select className="input max-w-[160px] text-sm">
-                    <option>main</option>
-                    <option>develop</option>
-                    <option>release/v2.4</option>
+                  <select value={defaultBranch} onChange={(e) => setDefaultBranch(e.target.value)} className="input max-w-[160px] text-sm">
+                    <option value="main">main</option>
+                    <option value="develop">develop</option>
+                    <option value="release/v2.4">release/v2.4</option>
                   </select>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-border-subtle">
@@ -330,7 +367,9 @@ export function SettingsPage() {
           {/* Save button */}
           <div className="flex items-center justify-end gap-2 mt-4">
             <Button variant="secondary" size="sm">Cancel</Button>
-            <Button size="sm"><Check size={14} /> Save Changes</Button>
+            <Button size="sm" onClick={handleSave}>
+              <Check size={14} /> {saved ? 'Saved!' : 'Save Changes'}
+            </Button>
           </div>
         </motion.div>
       </div>
