@@ -5,3 +5,5 @@ tree-sitter
 networkx
 pydantic
 sqlalchemy
+psycopg2-binary
+python-dotenv
