@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Map, Clock, ArrowRight, Check, Bot, Lock, BookOpen, ChevronRight,
-  Play, CheckCircle, Circle, GraduationCap,
+  Play, CheckCircle, Circle, GraduationCap, Filter,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -18,11 +18,22 @@ export function OnboardingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [steps, setSteps] = useState(mockOnboardingSteps);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(searchParams.get('step'));
+  const [roleFilter, setRoleFilter] = useState<string>('All');
 
-  const completedCount = steps.filter((s) => s.completed).length;
-  const totalCount = 12;
-  const pct = (completedCount / totalCount) * 100;
-  const totalMinutes = steps.reduce((sum, s) => sum + s.estimatedMinutes, 0);
+  // Filter steps based on selected role
+  const displayedSteps = steps.filter(step => {
+    if (roleFilter === 'All') return true;
+    const module = mockModules.find(m => m.id === step.moduleId);
+    return module?.layer === roleFilter;
+  });
+
+  // Calculate unique available roles
+  const availableRoles = ['All', ...new Set(mockModules.map(m => m.layer))].filter(Boolean);
+
+  const completedCount = displayedSteps.filter((s) => s.completed).length;
+  const totalCount = displayedSteps.length;
+  const pct = totalCount === 0 ? 0 : (completedCount / totalCount) * 100;
+  const totalMinutes = displayedSteps.reduce((sum, s) => sum + s.estimatedMinutes, 0);
   const totalHours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
 
@@ -35,20 +46,48 @@ export function OnboardingPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto pb-20 lg:pb-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <Map size={20} className="text-primary-400" />
-          <h1 className="text-2xl font-bold text-white tracking-tight">Your First Day</h1>
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Map size={20} className="text-primary-400" />
+            <h1 className="text-2xl font-bold text-white tracking-tight">Your First Day</h1>
+          </div>
+          <p className="text-sm text-gray-400">A guided path through this repository.</p>
         </div>
-        <p className="text-sm text-gray-400">A guided path through this repository.</p>
+
+        {/* Role Selector */}
+        <div className="flex items-center gap-2">
+          <Filter size={16} className="text-gray-500" />
+          <span className="text-sm text-gray-400 mr-1">Role:</span>
+          <div className="flex flex-wrap gap-1 bg-bg-elevated border border-border p-1 rounded-lg">
+            {availableRoles.map(role => (
+              <button
+                key={role}
+                onClick={() => setRoleFilter(role)}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                  roleFilter === role 
+                    ? 'bg-primary-600 text-white shadow-sm' 
+                    : 'text-gray-400 hover:text-white hover:bg-bg-hover'
+                }`}
+              >
+                {role}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Roadmap */}
         <div className="lg:col-span-2 space-y-3">
-          {steps.map((step, i) => {
-            const prevCompleted = i === 0 || steps[i - 1].completed;
-            const isLocked = !prevCompleted && !step.completed;
+          {displayedSteps.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 border border-dashed border-border rounded-lg">
+              No modules found for this role.
+            </div>
+          ) : (
+            displayedSteps.map((step, i) => {
+              const prevCompleted = i === 0 || displayedSteps[i - 1]?.completed;
+              const isLocked = !prevCompleted && !step.completed;
             const module = mockModules.find((m) => m.id === step.moduleId);
 
             return (
@@ -74,9 +113,9 @@ export function OnboardingPage() {
                             : 'bg-primary-500/15 text-primary-400 border border-primary-500/30'
                         }`}
                       >
-                        {step.completed ? <Check size={18} /> : isLocked ? <Lock size={14} /> : String(step.order).padStart(2, '0')}
+                        {step.completed ? <Check size={18} /> : isLocked ? <Lock size={14} /> : String(i + 1).padStart(2, '0')}
                       </div>
-                      {i < steps.length - 1 && (
+                      {i < displayedSteps.length - 1 && (
                         <div className={`w-px h-8 mt-2 ${step.completed ? 'bg-success-500/30' : 'bg-border'}`} />
                       )}
                     </div>
@@ -142,7 +181,7 @@ export function OnboardingPage() {
                 </Card>
               </motion.div>
             );
-          })}
+          }))}
         </div>
 
         {/* Progress sidebar */}
@@ -181,7 +220,7 @@ export function OnboardingPage() {
               </div>
 
               <div className="space-y-2">
-                {steps.map((step) => (
+                {displayedSteps.map((step) => (
                   <button
                     key={step.id}
                     onClick={() => setSelectedStepId(step.id)}
