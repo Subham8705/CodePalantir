@@ -55,7 +55,7 @@ def test_heuristic_naming():
     graph = nx.DiGraph()
     
     # 1. Single file module
-    name = detector._generate_module_name(["main.py"], graph)
+    name, core_file = detector._generate_module_name(["main.py"], graph)
     assert name == "Main"
     
     # 2. Scattered files, no common dir > 40%.
@@ -63,14 +63,15 @@ def test_heuristic_naming():
     graph.add_edge("src/a.py", "src/core.py", weight=1)
     graph.add_edge("src/b.py", "src/core.py", weight=1)
     files = ["src/a.py", "src/b.py", "src/core.py"]
-    name = detector._generate_module_name(files, graph)
+    name, core_file = detector._generate_module_name(files, graph)
     assert name == "Core Module"
+    assert core_file == "src/core.py"
     
     # 3. Index file
     graph.add_edge("src/components/Button.tsx", "src/components/index.ts", weight=1)
     graph.add_edge("src/components/Card.tsx", "src/components/index.ts", weight=1)
     files = ["src/components/Button.tsx", "src/components/Card.tsx", "src/components/index.ts"]
-    name = detector._generate_module_name(files, graph)
+    name, core_file = detector._generate_module_name(files, graph)
     # Since dir is 'src/components', and 'components' is ignored in the heuristic parts filtering,
     # wait, the directory logic might pick it. Let's see what the heuristic does:
     # If the common dir is 'src/components', it ignores 'src' and 'components'.

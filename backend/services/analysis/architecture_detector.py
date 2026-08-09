@@ -13,10 +13,11 @@ import uuid
 
 class ArchitectureModule:
     """Represents a discovered architectural module."""
-    def __init__(self, name: str, files: List[str]):
+    def __init__(self, name: str, files: List[str], core_file: str = None):
         self.id = str(uuid.uuid4())
         self.name = name
         self.files = files
+        self.core_file = core_file
         self.dependencies: List[str] = []  # IDs of modules this module depends on
         
     def to_dict(self) -> Dict[str, Any]:
@@ -24,6 +25,7 @@ class ArchitectureModule:
             "id": self.id,
             "name": self.name,
             "files": self.files,
+            "core_file": self.core_file,
             "dependencies": self.dependencies,
         }
 
@@ -55,7 +57,7 @@ class ArchitectureDetector:
             if not files:
                 continue
                 
-            name = self._generate_module_name(files, file_graph)
+            name, core_file = self._generate_module_name(files, file_graph)
             
             # Prevent duplicate names
             base_name = name
@@ -64,7 +66,7 @@ class ArchitectureDetector:
                 name = f"{base_name} {counter}"
                 counter += 1
                 
-            modules.append(ArchitectureModule(name=name, files=files))
+            modules.append(ArchitectureModule(name=name, files=files, core_file=core_file))
 
         # Calculate inter-module dependencies
         self._calculate_module_dependencies(modules, file_graph)
@@ -73,17 +75,26 @@ class ArchitectureDetector:
         modules.sort(key=lambda m: len(m.files), reverse=True)
         return modules
 
-    def _generate_module_name(self, files: List[str], graph: nx.DiGraph) -> str:
+    def _generate_module_name(self, files: List[str], graph: nx.DiGraph) -> tuple[str, str]:
         """
         Heuristic to name a module.
-        1. Find the most common directory among the files.
-        2. If scattered, use the file with the highest in-degree (most depended upon).
+        Returns (module_name, core_file).
         """
         if len(files) == 1:
             # Single file module
-            filename = os.path.basename(files[0])
+            core_file = files[0]
+            filename = os.path.basename(core_file)
             name, _ = os.path.splitext(filename)
-            return name.title()
+            return name.title(), core_file
+
+        # Calculate internal in-degrees to find the core file
+        internal_in_degrees = {}
+        for f in files:
+            # How many edges come from OTHER files in this SAME module?
+            in_edges = [u for u, v in graph.in_edges(f) if u in files and u != v]
+            internal_in_degrees[f] = len(in_edges)
+            
+        core_file = max(internal_in_degrees.items(), key=lambda x: x[1])[0]
 
         # Extract all directories
         dirs = []
@@ -102,27 +113,19 @@ class ArchitectureDetector:
                 # E.g., "src/auth" -> "Auth"
                 parts = [p for p in most_common_dir.split("/") if p not in (".", "src", "app", "lib", "components")]
                 if parts:
-                    return parts[-1].title().replace("-", " ").replace("_", " ")
+                    return parts[-1].title().replace("-", " ").replace("_", " "), core_file
 
-        # Fallback: Find the "core" file of this module (highest in-degree within the module)
-        # Calculate internal in-degrees
-        internal_in_degrees = {}
-        for f in files:
-            # How many edges come from OTHER files in this SAME module?
-            in_edges = [u for u, v in graph.in_edges(f) if u in files and u != v]
-            internal_in_degrees[f] = len(in_edges)
-            
-        core_file = max(internal_in_degrees.items(), key=lambda x: x[1])[0]
+        # Fallback: Find the "core" file of this module
         filename = os.path.basename(core_file)
         
         # Special case for index files or __init__.py
         if filename in ("index.ts", "index.js", "__init__.py"):
             dirname = os.path.basename(os.path.dirname(core_file))
             if dirname and dirname not in (".", "src", "app"):
-                return f"{dirname.title()} Core"
+                return f"{dirname.title()} Core", core_file
                 
         name, _ = os.path.splitext(filename)
-        return f"{name.title()} Module"
+        return f"{name.title()} Module", core_file
 
     def _calculate_module_dependencies(self, modules: List[ArchitectureModule], graph: nx.DiGraph):
         """
