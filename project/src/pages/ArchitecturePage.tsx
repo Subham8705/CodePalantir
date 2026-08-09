@@ -608,7 +608,7 @@ export function ArchitecturePage() {
               <Button onClick={() => navigate(`/app/modules/${selectedModule.id}`)} size="sm" className="flex-1">
                 Explore Module <ArrowRight size={14} />
               </Button>
-              <Button variant="secondary" size="sm">
+              <Button variant="secondary" size="sm" onClick={() => navigate(`/app/modules/${selectedModule.id}?tab=Dependencies`)}>
                 <GitBranch size={14} /> Dependencies
               </Button>
               <Button variant="secondary" size="sm" onClick={() => navigate('/app/assistant')}>

@@ -32,6 +32,7 @@ class ModuleSchema(BaseModel):
     ownership: Dict[str, int]
     color: str
     aiExplanation: str
+    history: List[Dict[str, Any]] = []
     
     class Config:
         from_attributes = True

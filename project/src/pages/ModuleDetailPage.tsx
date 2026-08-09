@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, FileCode, GitBranch, Users, Bot, Clock, Layers, Network,
@@ -14,24 +14,19 @@ import {
   ReactFlow, ReactFlowProvider, Background, Controls,
   type Node, type Edge, MarkerType,
 } from 'reactflow';
+import 'reactflow/dist/style.css';
 
 const tabs = ['Overview', 'Files', 'Dependencies', 'Contributors', 'History'] as const;
 type Tab = (typeof tabs)[number];
 
-const mockHistory = [
-  { commit: 'a3f2d1', message: 'Refactor token refresh logic', author: 'Alex Morgan', date: '2h ago', additions: 24, deletions: 12 },
-  { commit: 'b8e4c2', message: 'Add OAuth GitHub strategy', author: 'Alex Morgan', date: '1d ago', additions: 86, deletions: 0 },
-  { commit: 'c2a9f3', message: 'Fix session expiry edge case', author: 'Jordan Patel', date: '3d ago', additions: 18, deletions: 8 },
-  { commit: 'd7b1e5', message: 'Add rate limiting to auth endpoints', author: 'Alex Morgan', date: '5d ago', additions: 42, deletions: 5 },
-  { commit: 'e5f8a2', message: 'Initial auth module setup', author: 'Alex Morgan', date: '2w ago', additions: 184, deletions: 0 },
-];
 
 export function ModuleDetailPage() {
   const { mockModules, mockContributors } = useApi();
 
   const { moduleId } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('Overview');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'Overview');
 
   const module = mockModules.find((m) => m.id === moduleId);
 
@@ -61,8 +56,8 @@ export function ModuleDetailPage() {
   ];
   const depEdges: Edge[] = module.dependencies.map((depId) => ({
     id: `${module.id}-${depId}`,
-    source: depId,
-    target: module.id,
+    source: module.id,
+    target: depId,
     type: 'smoothstep',
     style: { stroke: '#30363D' },
     markerEnd: { type: MarkerType.ArrowClosed, color: '#3B82F6' },
@@ -248,30 +243,36 @@ export function ModuleDetailPage() {
         )}
 
         {activeTab === 'History' && (
-          <Card className="p-5">
-            <div className="space-y-0">
-              {mockHistory.map((commit, i) => (
-                <div key={commit.commit} className="flex items-start gap-4 py-3 border-b border-border-subtle last:border-0">
+          <div className="space-y-4">
+            {(!module.history || module.history.length === 0) ? (
+              <p className="text-gray-500 text-sm p-4 text-center">No recent commit history found for this module.</p>
+            ) : (
+              module.history.map((commit: any, i: number) => (
+                <div key={commit.commit || i} className="flex gap-4">
                   <div className="flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
-                      {commit.author.split(' ').map((n) => n[0]).join('')}
+                    <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center text-xs font-semibold text-primary-400">
+                      {commit.author.substring(0, 2).toUpperCase()}
                     </div>
-                    {i < mockHistory.length - 1 && <div className="w-px h-full bg-border mt-1" />}
+                    {i < module.history.length - 1 && <div className="w-px h-full bg-border mt-2" />}
                   </div>
-                  <div className="flex-1 pb-3">
-                    <div className="text-sm text-white">{commit.message}</div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                      <span className="font-mono">{commit.commit}</span>
+                  <div className="flex-1 pb-6 pt-1">
+                    <div className="text-sm font-medium text-white mb-1">{commit.message}</div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <span className="font-mono text-gray-400">{commit.commit}</span>
                       <span>{commit.author}</span>
                       <span>{commit.date}</span>
-                      <span className="text-success-400">+{commit.additions}</span>
-                      <span className="text-error-400">-{commit.deletions}</span>
+                      {commit.additions !== undefined && (
+                        <div className="flex items-center gap-2 ml-2">
+                          <span className="text-green-400">+{commit.additions}</span>
+                          <span className="text-red-400">-{commit.deletions}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </Card>
+              ))
+            )}
+          </div>
         )}
       </motion.div>
     </div>
