@@ -35,6 +35,12 @@ class PersistenceService:
         # 1. Delete existing repo analysis if it exists
         existing_repo = self.db.query(models.RepositoryModel).filter(models.RepositoryModel.url == repo_url).first()
         if existing_repo:
+            # Delete children explicitly to avoid Foreign Key constraint violations 
+            # if SQLAlchemy orders the cascade deletes incorrectly
+            self.db.query(models.OnboardingStepModel).filter(models.OnboardingStepModel.repository_id == existing_repo.id).delete()
+            self.db.query(models.ArchitectureModuleModel).filter(models.ArchitectureModuleModel.repository_id == existing_repo.id).delete()
+            self.db.query(models.ParsedFileModel).filter(models.ParsedFileModel.repository_id == existing_repo.id).delete()
+            
             self.db.delete(existing_repo)
             self.db.flush() # Flush the delete to avoid unique constraint violations
             
@@ -77,7 +83,8 @@ class PersistenceService:
                 files=mod.files,
                 dependencies=mod.dependencies,
                 churn_count=getattr(mod, 'churn_count', 0),
-                primary_owner=getattr(mod, 'primary_owner', None)
+                primary_owner=getattr(mod, 'primary_owner', None),
+                author_lines=getattr(mod, 'author_lines', {})
             )
             self.db.add(mod_model)
             

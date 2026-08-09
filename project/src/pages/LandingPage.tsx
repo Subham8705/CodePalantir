@@ -16,7 +16,9 @@ export function LandingPage() {
   const [repoUrl, setRepoUrl] = useState('');
 
   const handleAnalyze = () => {
-    navigate('/analyze');
+    if (repoUrl.trim()) {
+      navigate('/analyze', { state: { url: repoUrl } });
+    }
   };
 
   const handleExample = (url: string) => {

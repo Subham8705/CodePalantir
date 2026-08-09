@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import * as d3 from 'd3-force';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ReactFlow, Controls, Background, MiniMap, addEdge,
@@ -41,19 +42,15 @@ interface ModuleNodeData {
 }
 
 function createNodes(mockArchitectureNodes: any[]): Node<ModuleNodeData>[] {
-  const layerY: Record<string, number> = {};
-  layerOrder.forEach((l, i) => { layerY[l] = i * 140 + 60; });
-  const layerCounts: Record<string, number> = {};
-
   return mockArchitectureNodes.map((n) => {
-    layerCounts[n.layer] = (layerCounts[n.layer] || 0) + 1;
-    const idx = layerCounts[n.layer];
-    const count = mockArchitectureNodes.filter((x) => x.layer === n.layer).length;
-    const x = 200 + (idx - count / 2) * 200;
+    // Initial random positions near center
+    const x = 400 + (Math.random() - 0.5) * 400;
+    const y = 300 + (Math.random() - 0.5) * 400;
+    
     return {
       id: n.id,
       type: 'moduleNode',
-      position: { x, y: layerY[n.layer] },
+      position: { x, y },
       data: {
         label: n.label,
         layer: n.layer,
@@ -80,25 +77,23 @@ function createEdges(showExternal: boolean, mockArchitectureEdges: any[]): Edge[
 }
 
 function ModuleNode({ data, selected }: { data: ModuleNodeData; selected: boolean }) {
-  const color = layerColors[data.layer];
+  const color = layerColors[data.layer] || layerColors.Service;
   return (
-    <div
-      className="rounded-xl border-2 px-4 py-3 min-w-[140px] transition-all"
-      style={{
-        backgroundColor: selected ? color + '20' : '#111827',
-        borderColor: selected ? color : '#21262D',
-        boxShadow: selected ? `0 0 20px ${color}40` : '0 1px 3px rgba(0,0,0,0.3)',
-      }}
-    >
-      <div className="flex items-center gap-2 mb-1.5">
-        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-        <span className="text-sm font-semibold text-white">{data.label}</span>
+    <div className="flex flex-col items-center justify-center relative group">
+      <div 
+        className="w-14 h-14 rounded-full flex items-center justify-center transition-all border-4 shadow-lg cursor-pointer"
+        style={{
+          backgroundColor: selected ? color + '40' : color + '20',
+          borderColor: selected ? color : color + '80',
+          boxShadow: selected ? `0 0 20px ${color}80` : `0 4px 12px ${color}30`,
+        }}
+      >
+        <div className="w-6 h-6 rounded-full opacity-80" style={{ backgroundColor: color }} />
       </div>
-      <div className="flex items-center gap-3 text-xs text-gray-500">
-        <span className="flex items-center gap-1"><FileCode size={11} /> {data.fileCount}</span>
-        <span className="flex items-center gap-1"><GitBranch size={11} /> {data.dependencyCount}</span>
+      <div className="absolute top-16 mt-2 px-2.5 py-1 bg-[#111827] border border-[#21262D] rounded-lg text-xs font-semibold text-white whitespace-nowrap shadow-xl z-50">
+        {data.label}
+        <div className="text-[9px] text-gray-500 font-normal mt-0.5 text-center uppercase tracking-wider">{data.layer}</div>
       </div>
-      <div className="text-[10px] text-gray-600 mt-1 uppercase tracking-wide">{data.layer}</div>
     </div>
   );
 }
@@ -114,12 +109,16 @@ function ArchitectureFlow({ search, layerFilter, showExternal, onNodeClick, sele
   mockArchitectureNodes: any[];
   mockArchitectureEdges: any[];
 }) {
-  const [nodes, setNodes] = useState<Node<ModuleNodeData>[]>(createNodes(mockArchitectureNodes));
-  const [edges, setEdges] = useState<Edge[]>(createEdges(showExternal, mockArchitectureEdges));
+  const [nodes, setNodes] = useState<Node<ModuleNodeData>[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
   const [, setRfInstance] = useState<unknown>(null);
 
-  const filteredNodes = useMemo(() => {
-    return nodes.map((n) => {
+  useEffect(() => {
+    const rawNodes = createNodes(mockArchitectureNodes);
+    const rawEdges = createEdges(showExternal, mockArchitectureEdges);
+    
+    // Filter nodes first
+    const fNodes = rawNodes.map((n) => {
       const matchesSearch = !search || n.data.label.toLowerCase().includes(search.toLowerCase());
       const matchesLayer = layerFilter === 'All' || n.data.layer === layerFilter;
       return {
@@ -128,9 +127,40 @@ function ArchitectureFlow({ search, layerFilter, showExternal, onNodeClick, sele
         selected: n.id === selectedNode,
       };
     });
-  }, [nodes, search, layerFilter, selectedNode]);
 
-  const filteredEdges = useMemo(() => createEdges(showExternal, mockArchitectureEdges), [showExternal, mockArchitectureEdges]);
+    const visibleNodes = fNodes.filter(n => !n.hidden);
+    
+    // Create D3 forces
+    const d3Nodes = visibleNodes.map(n => ({ ...n, x: n.position.x, y: n.position.y }));
+    const d3Links = rawEdges.map(e => ({ source: e.source, target: e.target, id: e.id }));
+
+    const simulation = d3.forceSimulation(d3Nodes as any)
+      .force('charge', d3.forceManyBody().strength(-800))
+      .force('center', d3.forceCenter(400, 300))
+      .force('collide', d3.forceCollide().radius(70))
+      .force('link', d3.forceLink(d3Links as any).id((d: any) => d.id).distance(200))
+      .stop();
+
+    // Run physics statically
+    for (let i = 0; i < 200; i++) {
+      simulation.tick();
+    }
+
+    // Apply computed positions back
+    setNodes(fNodes.map(n => {
+      if (n.hidden) return n;
+      const computed = (d3Nodes as any).find((d: any) => d.id === n.id);
+      if (computed) {
+        return { ...n, position: { x: computed.x, y: computed.y } };
+      }
+      return n;
+    }));
+    
+    setEdges(rawEdges);
+  }, [mockArchitectureNodes, mockArchitectureEdges, search, layerFilter, showExternal, selectedNode]);
+
+  const filteredNodes = nodes;
+  const filteredEdges = edges;
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {

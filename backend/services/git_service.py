@@ -32,12 +32,16 @@ class GitService:
 
         # If it already exists, for this phase we'll just delete it and re-clone 
         # (or we could just pull/return it)
-        if target_dir.exists():
-            shutil.rmtree(target_dir, ignore_errors=True)
-
         try:
-            print(f"Cloning {url} to {target_dir}...")
-            repo = Repo.clone_from(url, target_dir)
+            if target_dir.exists() and (target_dir / ".git").exists():
+                print(f"Pulling {url} in {target_dir}...")
+                repo = Repo(target_dir)
+                origin = repo.remotes.origin
+                origin.pull()
+            else:
+                shutil.rmtree(target_dir, ignore_errors=True)
+                print(f"Cloning {url} to {target_dir}...")
+                repo = Repo.clone_from(url, target_dir)
             
             # Gather simple stats
             file_count = sum([len(files) for r, d, files in os.walk(target_dir) if '.git' not in r])

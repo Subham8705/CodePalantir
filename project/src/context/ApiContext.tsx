@@ -22,6 +22,7 @@ interface ApiContextType {
   mockFileTree: FileNode;
   loading: boolean;
   error: string | null;
+  refreshData: () => Promise<void>;
 }
 
 const ApiContext = createContext<ApiContextType | undefined>(undefined);
@@ -53,53 +54,54 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        const [
-          repoRes, modulesRes, contributorsRes, notificationsRes,
-          archNodesRes, archEdgesRes, onboardingRes, fileTreeRes
-        ] = await Promise.allSettled([
-          fetch(`${API_BASE_URL}/repo/overview`),
-          fetch(`${API_BASE_URL}/modules`),
-          fetch(`${API_BASE_URL}/contributors`),
-          fetch(`${API_BASE_URL}/notifications`),
-          fetch(`${API_BASE_URL}/architecture/nodes`),
-          fetch(`${API_BASE_URL}/architecture/edges`),
-          fetch(`${API_BASE_URL}/onboarding`),
-          fetch(`${API_BASE_URL}/files/tree`)
-        ]);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [
+        repoRes, modulesRes, contributorsRes, notificationsRes,
+        archNodesRes, archEdgesRes, onboardingRes, fileTreeRes
+      ] = await Promise.allSettled([
+        fetch(`${API_BASE_URL}/repo/overview`),
+        fetch(`${API_BASE_URL}/modules`),
+        fetch(`${API_BASE_URL}/contributors`),
+        fetch(`${API_BASE_URL}/notifications`),
+        fetch(`${API_BASE_URL}/architecture/nodes`),
+        fetch(`${API_BASE_URL}/architecture/edges`),
+        fetch(`${API_BASE_URL}/onboarding`),
+        fetch(`${API_BASE_URL}/files/tree`)
+      ]);
 
-        const extractData = async (res: PromiseSettledResult<Response>, defaultVal: any) => {
-          if (res.status === 'fulfilled' && res.value.ok) {
-            try { return await res.value.json(); } catch (e) { return defaultVal; }
-          }
-          return defaultVal;
-        };
+      const extractData = async (res: PromiseSettledResult<Response>, defaultVal: any) => {
+        if (res.status === 'fulfilled' && res.value.ok) {
+          try { return await res.value.json(); } catch (e) { return defaultVal; }
+        }
+        return defaultVal;
+      };
 
-        setData({
-          mockRepository: await extractData(repoRes, defaultRepository),
-          exampleRepositories: [],
-          mockModules: await extractData(modulesRes, []),
-          mockContributors: await extractData(contributorsRes, []),
-          mockNotifications: await extractData(notificationsRes, []),
-          mockArchitectureNodes: await extractData(archNodesRes, []),
-          mockArchitectureEdges: await extractData(archEdgesRes, []),
-          mockOnboardingSteps: await extractData(onboardingRes, []),
-          mockFileTree: await extractData(fileTreeRes, defaultFileTree),
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
+      setData({
+        mockRepository: await extractData(repoRes, defaultRepository),
+        exampleRepositories: [],
+        mockModules: await extractData(modulesRes, []),
+        mockContributors: await extractData(contributorsRes, []),
+        mockNotifications: await extractData(notificationsRes, []),
+        mockArchitectureNodes: await extractData(archNodesRes, []),
+        mockArchitectureEdges: await extractData(archEdgesRes, []),
+        mockOnboardingSteps: await extractData(onboardingRes, []),
+        mockFileTree: await extractData(fileTreeRes, defaultFileTree),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
   return (
-    <ApiContext.Provider value={{ ...data, loading, error }}>
+    <ApiContext.Provider value={{ ...data, loading, error, refreshData: fetchData }}>
       {children}
     </ApiContext.Provider>
   );

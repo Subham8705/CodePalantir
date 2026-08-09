@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   LayoutDashboard, Network, Map, Users, FolderTree, Bot, BarChart3, Settings as SettingsIcon,
   Search, Bell, Github, Menu, X, ChevronDown, Compass, Sun, Moon, Check, UserPlus, Route,
-  CircleAlert,
+  CircleAlert, RotateCcw,
 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -31,7 +31,7 @@ const notificationIcons: Record<string, typeof Check> = {
 };
 
 export function AppLayout() {
-  const { mockRepository, mockNotifications } = useApi();
+  const { mockRepository, mockNotifications, refreshData } = useApi();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -268,6 +268,30 @@ export function AppLayout() {
             <span>Search...</span>
             <kbd className="text-[10px] text-gray-600 border border-border rounded px-1 py-0.5 ml-2">⌘K</kbd>
           </button>
+          
+          <Tooltip content="Pull latest from GitHub and re-analyze">
+            <button
+              onClick={async () => {
+                const btn = document.getElementById('sync-btn-icon');
+                if (btn) btn.classList.add('animate-spin');
+                try {
+                  const res = await fetch('http://127.0.0.1:8000/api/repo/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: mockRepository.url || 'https://github.com/Subham8705/CodePalantir.git' })
+                  });
+                  if (res.ok) {
+                    await refreshData();
+                  }
+                } finally {
+                  if (btn) btn.classList.remove('animate-spin');
+                }
+              }}
+              className="flex items-center justify-center w-8 h-8 rounded-md bg-bg-hover border border-border text-gray-400 hover:text-white transition-colors"
+            >
+              <RotateCcw id="sync-btn-icon" size={14} />
+            </button>
+          </Tooltip>
 
           {/* Notifications */}
           <div className="relative">

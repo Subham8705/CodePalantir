@@ -51,6 +51,7 @@ class ArchitectureModuleModel(Base):
     # Git Data aggregated
     churn_count = Column(Integer, default=0)
     primary_owner = Column(String, nullable=True)
+    author_lines = Column(JSON, default=dict) # Dict of author -> lines
     
     # Relationships
     repository = relationship("RepositoryModel", back_populates="modules")

@@ -19,6 +19,7 @@ class ArchitectureModule:
         self.files = files
         self.core_file = core_file
         self.dependencies: List[str] = []  # IDs of modules this module depends on
+        self.author_lines: Dict[str, int] = {}
         
     def to_dict(self) -> Dict[str, Any]:
         return {

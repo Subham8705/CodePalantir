@@ -148,6 +148,7 @@ class GitAnalyzer:
                     mod_author_lines.update(stats.author_lines)
                     
             mod.churn_count = total_churn
+            mod.author_lines = dict(mod_author_lines)
             if mod_author_lines:
                 mod.primary_owner = max(mod_author_lines.items(), key=lambda x: x[1])[0]
             else:

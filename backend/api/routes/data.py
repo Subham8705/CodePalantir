@@ -131,12 +131,35 @@ def get_layer(name: str) -> str:
     return "Service"
 
 
+def _get_author_id_map(repo) -> Dict[str, str]:
+    authors = {}
+    for f in repo.files:
+        if f.author_lines:
+            for author, lines in f.author_lines.items():
+                if author not in authors:
+                    authors[author] = 0
+                authors[author] += lines
+    sorted_authors = sorted(authors.items(), key=lambda x: x[1], reverse=True)
+    return {name: str(idx) for idx, (name, _) in enumerate(sorted_authors[:10])}
+
 @router.get("/modules", response_model=List[schemas.ModuleSchema])
 def get_modules(db: Session = Depends(get_db)):
     repo = get_latest_repo(db)
     result = []
+    author_id_map = _get_author_id_map(repo)
     
     for mod in repo.modules:
+        # Calculate real ownership percentages
+        ownership = {}
+        author_lines_dict = getattr(mod, 'author_lines', {}) or {}
+        total_lines = sum(author_lines_dict.values())
+        
+        if total_lines > 0:
+            for author, lines in author_lines_dict.items():
+                author_id = author_id_map.get(author)
+                if author_id is not None:
+                    ownership[author_id] = round((lines / total_lines) * 100)
+                    
         result.append(schemas.ModuleSchema(
             id=mod.id,
             name=mod.name,
@@ -147,7 +170,7 @@ def get_modules(db: Session = Depends(get_db)):
             dependents=[],
             primaryContributors=[mod.primary_owner] if mod.primary_owner else [],
             files=[],
-            ownership={"0": 60, "1": 40}, # Mock ownership data based on our mock contributors '0' and '1'
+            ownership=ownership,
             color="#3178C6",
             aiExplanation="This module handles core logic."
         ))
