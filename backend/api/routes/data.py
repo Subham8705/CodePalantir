@@ -366,6 +366,29 @@ def get_file_tree(db: Session = Depends(get_db)):
     # Build tree from flat list of paths
     root = {"name": "root", "path": "", "type": "directory", "children": {}}
     
+    # Pre-calculate imported_by relationships
+    # The naive resolver in ImportResolver already gives us good path matching, but we'll do a simple substring match for raw imports for the UI.
+    imported_by_map = {f.relative_path: [] for f in repo.files}
+    for f in repo.files:
+        for imp in (f.imports or []):
+            imp_str = imp.get("module", "") if isinstance(imp, dict) else str(imp)
+            if not imp_str:
+                continue
+            # Very naive match: if import path is part of another file's path
+            for other_f in repo.files:
+                if f.relative_path != other_f.relative_path:
+                    # Strip common prefix/suffix or just check if import string appears in path
+                    imp_clean = imp_str.replace('./', '').replace('../', '').split('/')[-1]
+                    if not imp_clean:
+                        continue
+                    
+                    # Extract the filename without extension from the other file's path
+                    other_f_name = other_f.relative_path.replace('\\', '/').split('/')[-1].split('.')[0]
+                    
+                    if imp_clean == other_f_name or imp_clean == other_f_name + ".js" or imp_clean == other_f_name + ".ts":
+                        if f.relative_path not in imported_by_map[other_f.relative_path]:
+                            imported_by_map[other_f.relative_path].append(f.relative_path)
+                            
     for f in repo.files:
         parts = f.relative_path.replace("\\", "/").split("/")
         current = root
@@ -392,7 +415,12 @@ def get_file_tree(db: Session = Depends(get_db)):
             "language": ext[1:] if ext else "text",
             "size": 1024, # Mock size
             "commits": f.churn_count,
-            "owner": f.primary_owner
+            "owner": f.primary_owner,
+            "lines": sum(f.author_lines.values()) if f.author_lines else 0,
+            "lastModified": "Recent",
+            "contributors": list(f.author_lines.keys()) if f.author_lines else [],
+            "imports": [imp.get("module", "") if isinstance(imp, dict) else str(imp) for imp in (f.imports or [])],
+            "importedBy": imported_by_map.get(f.relative_path, [])
         }
         
     # Recursive function to convert dict to list of children
@@ -417,6 +445,11 @@ def get_file_tree(db: Session = Depends(get_db)):
             result["size"] = node.get("size")
             result["commits"] = node.get("commits")
             result["owner"] = node.get("owner")
+            result["lines"] = node.get("lines")
+            result["lastModified"] = node.get("lastModified")
+            result["contributors"] = node.get("contributors")
+            result["imports"] = node.get("imports")
+            result["importedBy"] = node.get("importedBy")
             
         return result
 

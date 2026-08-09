@@ -165,35 +165,43 @@ export function ExplorerPage() {
         style: { background: '#3B82F620', border: '2px solid #3B82F6', color: '#fff', fontSize: 12, borderRadius: 8, padding: 8 },
       },
     ];
-    // Mock dependencies
-    const deps = mockModules.flatMap((m) => m.files).filter((f) => f.name !== selectedFile.name).slice(0, 4);
-    deps.forEach((dep, i) => {
-      const angle = (i / deps.length) * Math.PI * 2;
+    
+    // Dependencies (imports from)
+    const deps = (selectedFile.imports || []).slice(0, 10);
+    deps.forEach((depStr: string, i: number) => {
+      const depName = depStr.split('/').pop() || depStr;
+      const angle = (i / Math.max(deps.length, 1)) * Math.PI * 2;
       nodes.push({
         id: `dep-${i}`,
-        position: { x: 300 + Math.cos(angle) * 200, y: 200 + Math.sin(angle) * 150 },
-        data: { label: dep.name },
+        position: { x: 300 + Math.cos(angle) * 180, y: 200 + Math.sin(angle) * 140 },
+        data: { label: depName },
         style: { background: '#111827', border: '1px solid #21262D', color: '#8B949E', fontSize: 11, borderRadius: 8, padding: 6 },
       });
     });
-    // Dependents
-    const dependents = mockModules.flatMap((m) => m.files).filter((f) => f.name !== selectedFile.name).slice(4, 7);
-    dependents.forEach((dep, i) => {
-      const angle = (i / dependents.length) * Math.PI * 2 + Math.PI;
+    
+    // Dependents (imported by)
+    const dependents = (selectedFile.importedBy || []).slice(0, 10);
+    dependents.forEach((depStr: string, i: number) => {
+      const depName = depStr.split('/').pop() || depStr;
+      const angle = (i / Math.max(dependents.length, 1)) * Math.PI * 2 + Math.PI;
       nodes.push({
         id: `dependent-${i}`,
-        position: { x: 300 + Math.cos(angle) * 180, y: 200 + Math.sin(angle) * 120 },
-        data: { label: dep.name },
+        position: { x: 300 + Math.cos(angle) * 220, y: 200 + Math.sin(angle) * 100 },
+        data: { label: depName },
         style: { background: '#111827', border: '1px solid #8B5CF640', color: '#8B949E', fontSize: 11, borderRadius: 8, padding: 6 },
       });
     });
+    
     return nodes;
   }, [selectedFile]);
 
   const depGraphEdges = useMemo<Edge[]>(() => {
     if (!selectedFile) return [];
     const edges: Edge[] = [];
-    for (let i = 0; i < 4; i++) {
+    const depsCount = Math.min((selectedFile.imports || []).length, 10);
+    const dependentsCount = Math.min((selectedFile.importedBy || []).length, 10);
+    
+    for (let i = 0; i < depsCount; i++) {
       edges.push({
         id: `dep-edge-${i}`,
         source: `dep-${i}`,
@@ -203,7 +211,7 @@ export function ExplorerPage() {
         markerEnd: { type: MarkerType.ArrowClosed, color: '#3B82F6' },
       });
     }
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < dependentsCount; i++) {
       edges.push({
         id: `dependent-edge-${i}`,
         source: selectedFile.id,
@@ -216,9 +224,6 @@ export function ExplorerPage() {
     return edges;
   }, [selectedFile]);
 
-  const fileContributors = selectedFile?.contributors?.map((name) => {
-    return mockContributors.find((c) => c.name.split(' ')[0] === name) || null;
-  }).filter(Boolean) || [];
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
@@ -301,13 +306,13 @@ export function ExplorerPage() {
 
       {/* File info panel */}
       {selectedFile && (
-        <div className="w-72 border-l border-border bg-bg-elevated/30 p-4 space-y-4 overflow-y-auto hidden lg:block flex-shrink-0">
+        <div className="w-72 border-l border-border bg-bg-elevated p-4 space-y-4 overflow-y-auto hidden lg:block flex-shrink-0 z-10 relative">
           <div>
             <h3 className="text-sm font-semibold text-white mb-3">File Information</h3>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-500">File name</span>
-                <span className="text-gray-200 font-mono">{selectedFile.name}</span>
+                <span className="text-gray-200 font-mono truncate max-w-[150px]">{selectedFile.name}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-500">Language</span>
@@ -319,42 +324,50 @@ export function ExplorerPage() {
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-500">Last modified</span>
-                <span className="text-gray-200 flex items-center gap-1"><Clock size={10} /> {selectedFile.lastModified || '—'}</span>
+                <span className="text-gray-200 flex items-center gap-1"><Clock size={10} /> {selectedFile.lastModified || 'Recent'}</span>
               </div>
             </div>
           </div>
 
-          <div>
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Contributors</h4>
-            <div className="space-y-2">
-              {fileContributors.map((c) => c && (
-                <div key={c.id} className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-[10px] font-semibold text-white">
-                    {c.avatar}
+          {selectedFile.contributors && selectedFile.contributors.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Contributors</h4>
+              <div className="space-y-2">
+                {selectedFile.contributors.map((c) => (
+                  <div key={c} className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-[10px] font-semibold text-white">
+                      {c.substring(0, 2).toUpperCase()}
+                    </div>
+                    <span className="text-xs text-gray-300">{c}</span>
                   </div>
-                  <span className="text-xs text-gray-300">{c.name}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div>
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Imports</h4>
-            <div className="space-y-1">
-              {['./config', '../utils/crypto.util', '../repositories/user.repository'].map((imp) => (
-                <div key={imp} className="text-xs font-mono text-gray-400 truncate">{imp}</div>
-              ))}
+          {selectedFile.imports && selectedFile.imports.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Imports ({selectedFile.imports.length})</h4>
+              <div className="space-y-1">
+                {selectedFile.imports.slice(0, 10).map((imp: string) => (
+                  <div key={imp} className="text-xs font-mono text-gray-400 truncate" title={imp}>{imp}</div>
+                ))}
+                {selectedFile.imports.length > 10 && <div className="text-xs text-gray-500">+{selectedFile.imports.length - 10} more</div>}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div>
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Imported By</h4>
-            <div className="space-y-1">
-              {['backend/controllers/auth.controller.ts', 'backend/middleware/auth.middleware.ts'].map((imp) => (
-                <div key={imp} className="text-xs font-mono text-gray-400 truncate">{imp}</div>
-              ))}
+          {selectedFile.importedBy && selectedFile.importedBy.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Imported By ({selectedFile.importedBy.length})</h4>
+              <div className="space-y-1">
+                {selectedFile.importedBy.slice(0, 10).map((imp: string) => (
+                  <div key={imp} className="text-xs font-mono text-gray-400 truncate" title={imp}>{imp}</div>
+                ))}
+                {selectedFile.importedBy.length > 10 && <div className="text-xs text-gray-500">+{selectedFile.importedBy.length - 10} more</div>}
+              </div>
             </div>
-          </div>
+          )}
 
           <Button variant="secondary" size="sm" className="w-full" onClick={() => setDepModalOpen(true)}>
             <Network size={14} /> Show Dependencies
@@ -384,22 +397,30 @@ export function ExplorerPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Dependencies</h4>
-                <div className="space-y-1.5">
-                  {mockModules.flatMap((m) => m.files).slice(0, 4).map((f) => (
-                    <button key={f.path} onClick={() => { setDepModalOpen(false); handleSelectFile({ ...f, id: f.path } as FileNode); }} className="w-full flex items-center gap-2 text-xs text-gray-400 hover:text-primary-400 transition-colors">
-                      <ArrowRight size={12} /> <span className="font-mono truncate">{f.name}</span>
-                    </button>
-                  ))}
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-2">
+                  {(selectedFile.imports || []).length === 0 ? (
+                    <span className="text-xs text-gray-600">No dependencies</span>
+                  ) : (
+                    (selectedFile.imports || []).map((imp: string) => (
+                      <div key={imp} className="w-full flex items-center gap-2 text-xs text-gray-400">
+                        <ArrowRight size={12} className="flex-shrink-0" /> <span className="font-mono truncate" title={imp}>{imp}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
               <div>
                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Dependents</h4>
-                <div className="space-y-1.5">
-                  {mockModules.flatMap((m) => m.files).slice(4, 7).map((f) => (
-                    <button key={f.path} onClick={() => { setDepModalOpen(false); handleSelectFile({ ...f, id: f.path } as FileNode); }} className="w-full flex items-center gap-2 text-xs text-gray-400 hover:text-primary-400 transition-colors">
-                      <ArrowRight size={12} className="rotate-180" /> <span className="font-mono truncate">{f.name}</span>
-                    </button>
-                  ))}
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-2">
+                  {(selectedFile.importedBy || []).length === 0 ? (
+                    <span className="text-xs text-gray-600">No dependents</span>
+                  ) : (
+                    (selectedFile.importedBy || []).map((imp: string) => (
+                      <div key={imp} className="w-full flex items-center gap-2 text-xs text-gray-400">
+                        <ArrowRight size={12} className="rotate-180 flex-shrink-0" /> <span className="font-mono truncate" title={imp}>{imp}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

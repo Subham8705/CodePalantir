@@ -92,5 +92,10 @@ class FileNodeSchema(BaseModel):
     size: Optional[int] = None
     commits: Optional[int] = None
     owner: Optional[str] = None
+    lines: Optional[int] = None
+    lastModified: Optional[str] = None
+    contributors: Optional[List[str]] = None
+    imports: Optional[List[str]] = None
+    importedBy: Optional[List[str]] = None
 
 FileNodeSchema.model_rebuild()
