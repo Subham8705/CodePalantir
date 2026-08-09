@@ -147,7 +147,7 @@ export function OwnershipPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-white truncate">{c.name}</div>
-                  <div className="text-xs text-gray-500 truncate">{c.primaryAreas.join(', ')}</div>
+                  <div className="text-xs text-gray-500 truncate">{c.primaryAreas?.join(', ') || 'No primary areas'}</div>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="text-sm font-semibold text-white">{c.contributionPct}%</div>

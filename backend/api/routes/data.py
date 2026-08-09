@@ -188,18 +188,15 @@ def get_architecture_nodes(db: Session = Depends(get_db)):
     repo = get_latest_repo(db)
     nodes = []
     
-    # Simple grid layout algorithm for React Flow
-    cols = math.ceil(math.sqrt(len(repo.modules)))
-    
-    for idx, mod in enumerate(repo.modules):
-        row = idx // cols
-        col = idx % cols
-        
+    for mod in repo.modules:
         nodes.append(schemas.ArchitectureNodeSchema(
             id=mod.id,
-            data={"label": mod.name},
-            position={"x": col * 250, "y": row * 150},
-            type="moduleNode"
+            label=mod.name,
+            layer="API", # Default layer
+            fileCount=len(mod.files),
+            dependencyCount=len(mod.dependencies),
+            description=mod.description or "No description",
+            moduleId=mod.id
         ))
     return nodes
 

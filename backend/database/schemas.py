@@ -54,9 +54,12 @@ class ContributorSchema(BaseModel):
 
 class ArchitectureNodeSchema(BaseModel):
     id: str
-    data: Dict[str, str]
-    position: Dict[str, int]
-    type: str
+    label: str
+    layer: str
+    fileCount: int
+    dependencyCount: int
+    description: str
+    moduleId: str
 
 class ArchitectureEdgeSchema(BaseModel):
     id: str
