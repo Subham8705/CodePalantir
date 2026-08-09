@@ -125,7 +125,7 @@ export function ExplorerPage() {
     if (!selectedFile) return;
     setLoading(true);
     // Fetch file content from backend
-    fetch(`http://127.0.0.1:8000/api/files/content?path=${encodeURIComponent(selectedFile.path)}`)
+    fetch(`/api/files/content?path=${encodeURIComponent(selectedFile.path)}`)
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch');
         return res.text();

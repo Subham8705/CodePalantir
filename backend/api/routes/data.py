@@ -1,6 +1,7 @@
 import os
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 import math
 import random
@@ -99,6 +100,25 @@ def get_repo_overview(db: Session = Depends(get_db)):
     )
 
 
+@router.get("/files/content")
+def get_file_content(path: str, db: Session = Depends(get_db)):
+    """Reads actual file content from the cloned repository on disk."""
+    repo = get_latest_repo(db)
+    repo_dir = repo.name.split('/')[-1] if '/' in repo.name else repo.name
+    full_path = os.path.join("cloned_repos", repo_dir, path)
+    
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+        
+    try:
+        with open(full_path, "r", encoding="utf-8") as f:
+            return PlainTextResponse(f.read())
+    except UnicodeDecodeError:
+        return PlainTextResponse("// Binary or unreadable file format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/modules", response_model=List[schemas.ModuleSchema])
 def get_modules(db: Session = Depends(get_db)):
     repo = get_latest_repo(db)
@@ -109,10 +129,15 @@ def get_modules(db: Session = Depends(get_db)):
             id=mod.id,
             name=mod.name,
             description=f"Core file: {mod.core_file}" if mod.core_file else "Architecture Module",
-            files=len(mod.files) if mod.files else 0,
+            layer="API",
+            fileCount=len(mod.files) if mod.files else 0,
             dependencies=mod.dependencies if mod.dependencies else [],
-            churn=mod.churn_count or 0,
-            primaryOwner=mod.primary_owner
+            dependents=[],
+            primaryContributors=[mod.primary_owner] if mod.primary_owner else [],
+            files=[],
+            ownership={"0": 60, "1": 40}, # Mock ownership data based on our mock contributors '0' and '1'
+            color="#3178C6",
+            aiExplanation="This module handles core logic."
         ))
     return result
 

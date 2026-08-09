@@ -23,10 +23,15 @@ class ModuleSchema(BaseModel):
     id: str
     name: str
     description: str
-    files: int
+    layer: str
+    fileCount: int
     dependencies: List[str]
-    churn: int
-    primaryOwner: Optional[str]
+    dependents: List[str]
+    primaryContributors: List[str]
+    files: List[Any] # Will just return empty list for now or minimal objects
+    ownership: Dict[str, int]
+    color: str
+    aiExplanation: str
     
     class Config:
         from_attributes = True
