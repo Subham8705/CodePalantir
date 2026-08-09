@@ -57,18 +57,19 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const ts = new Date().getTime();
       const [
         repoRes, modulesRes, contributorsRes, notificationsRes,
         archNodesRes, archEdgesRes, onboardingRes, fileTreeRes
       ] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/repo/overview`),
-        fetch(`${API_BASE_URL}/modules`),
-        fetch(`${API_BASE_URL}/contributors`),
-        fetch(`${API_BASE_URL}/notifications`),
-        fetch(`${API_BASE_URL}/architecture/nodes`),
-        fetch(`${API_BASE_URL}/architecture/edges`),
-        fetch(`${API_BASE_URL}/onboarding`),
-        fetch(`${API_BASE_URL}/files/tree`)
+        fetch(`${API_BASE_URL}/repo/overview?t=${ts}`),
+        fetch(`${API_BASE_URL}/modules?t=${ts}`),
+        fetch(`${API_BASE_URL}/contributors?t=${ts}`),
+        fetch(`${API_BASE_URL}/notifications?t=${ts}`),
+        fetch(`${API_BASE_URL}/architecture/nodes?t=${ts}`),
+        fetch(`${API_BASE_URL}/architecture/edges?t=${ts}`),
+        fetch(`${API_BASE_URL}/onboarding?t=${ts}`),
+        fetch(`${API_BASE_URL}/files/tree?t=${ts}`)
       ]);
 
       const extractData = async (res: PromiseSettledResult<Response>, defaultVal: any) => {

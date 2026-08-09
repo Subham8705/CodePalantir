@@ -174,8 +174,8 @@ function ForceGraph({
       .enter()
       .append('line')
       .attr('class', 'link')
-      .attr('stroke', (d: D3Link) => d.type === 'external' ? '#F59E0B33' : '#30363D')
-      .attr('stroke-width', 1.5)
+      .attr('stroke', (d: D3Link) => d.type === 'external' ? '#F59E0B55' : 'rgba(148, 163, 184, 0.35)')
+      .attr('stroke-width', 1.2)
       .attr('stroke-dasharray', (d: D3Link) => d.type === 'external' ? '4,4' : 'none');
 
     // ── Draw Arrow markers ──
@@ -335,13 +335,13 @@ function ForceGraph({
     g.selectAll<SVGLineElement, D3Link>('.link')
       .transition().duration(200)
       .attr('stroke', (d: any) => {
-        if (!hoveredNode) return d.type === 'external' ? '#F59E0B33' : '#30363D';
+        if (!hoveredNode) return d.type === 'external' ? '#F59E0B55' : 'rgba(148, 163, 184, 0.35)';
         const src = typeof d.source === 'object' ? d.source.id : d.source;
         const tgt = typeof d.target === 'object' ? d.target.id : d.target;
         if (src === hoveredNode || tgt === hoveredNode) {
           return layerColors[(d.source as D3Node).layer] || '#3B82F6';
         }
-        return '#30363D20';
+        return 'rgba(148, 163, 184, 0.08)';
       })
       .attr('stroke-width', (d: any) => {
         if (!hoveredNode) return 1.5;

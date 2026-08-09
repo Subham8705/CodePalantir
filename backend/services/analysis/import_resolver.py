@@ -96,6 +96,16 @@ class ImportResolver:
             match = self._check_python_module(f"{common_dir}/{module_path}")
             if match:
                 return match
+        
+        # 3. Walk up from the source file's directory to find the package root
+        #    e.g. source is "backend/main.py", import is "database.database"
+        #    -> try "backend/database/database.py"
+        parts = source_dir.split("/") if source_dir != "." else []
+        for i in range(len(parts), 0, -1):
+            ancestor = "/".join(parts[:i])
+            match = self._check_python_module(f"{ancestor}/{module_path}")
+            if match:
+                return match
                 
         return None
 
@@ -146,10 +156,9 @@ class ImportResolver:
             
         # Handle alias imports (very common: @/components/Button)
         if import_str.startswith("@/"):
-            # Assume @ maps to src or the root
             target_base = import_str[2:]
             
-            # Try src/
+            # Try src/ from repo root
             match = self._check_js_ts_module(f"src/{target_base}")
             if match:
                 return match
@@ -158,6 +167,25 @@ class ImportResolver:
             match = self._check_js_ts_module(target_base)
             if match:
                 return match
+            
+            # Walk up from source file to find a src/ ancestor
+            # e.g. source is "project/src/App.tsx", import is "@/components/Logo"
+            # -> find "project/src" as the src root, try "project/src/components/Logo"
+            src_parts = source_dir.split("/") if source_dir != "." else []
+            for i in range(len(src_parts), 0, -1):
+                if src_parts[i-1] == "src":
+                    src_root = "/".join(src_parts[:i])
+                    match = self._check_js_ts_module(f"{src_root}/{target_base}")
+                    if match:
+                        return match
+                    break
+            
+            # Also try every ancestor directory + src/
+            for i in range(len(src_parts), 0, -1):
+                ancestor = "/".join(src_parts[:i])
+                match = self._check_js_ts_module(f"{ancestor}/src/{target_base}")
+                if match:
+                    return match
                 
         # Handle tilde alias (~/)
         if import_str.startswith("~/"):
@@ -168,6 +196,13 @@ class ImportResolver:
             match = self._check_js_ts_module(target_base)
             if match:
                 return match
+            # Walk up ancestors
+            src_parts = source_dir.split("/") if source_dir != "." else []
+            for i in range(len(src_parts), 0, -1):
+                ancestor = "/".join(src_parts[:i])
+                match = self._check_js_ts_module(f"{ancestor}/src/{target_base}")
+                if match:
+                    return match
 
         # Third party dependencies (or unhandled aliases)
         return None

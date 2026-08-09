@@ -306,15 +306,23 @@ def get_architecture_nodes(db: Session = Depends(get_db)):
     repo = get_latest_repo(db)
     nodes = []
     
+    file_to_module = {}
     for mod in repo.modules:
+        for fpath in mod.files:
+            file_to_module[fpath] = mod
+            
+    for file in repo.files:
+        fpath = file.relative_path.replace("\\", "/")
+        mod = file_to_module.get(fpath)
+        
         nodes.append(schemas.ArchitectureNodeSchema(
-            id=mod.id,
-            label=mod.name,
-            layer=get_layer(mod.name),
-            fileCount=len(mod.files),
-            dependencyCount=len(mod.dependencies),
-            description=f"Core file: {mod.core_file}" if mod.core_file else "Module component",
-            moduleId=mod.id
+            id=fpath,
+            label=fpath.split('/')[-1],
+            layer=get_layer(mod.name) if mod else "Unknown",
+            fileCount=1,
+            dependencyCount=len(file.imports or []),
+            description=f"File: {fpath}",
+            moduleId=mod.id if mod else "unknown"
         ))
     return nodes
 
@@ -324,16 +332,31 @@ def get_architecture_edges(db: Session = Depends(get_db)):
     repo = get_latest_repo(db)
     edges = []
     
-    for mod in repo.modules:
-        if mod.dependencies:
-            for dep_id in mod.dependencies:
-                edges.append(schemas.ArchitectureEdgeSchema(
-                    id=f"e-{mod.id}-{dep_id}",
-                    source=mod.id,
-                    target=dep_id,
-                    animated=True
-                ))
-    return edges
+    from services.analysis.import_resolver import ImportResolver
+    available_files = {f.relative_path.replace("\\", "/") for f in repo.files}
+    resolver = ImportResolver("dummy", available_files)
+    
+    for file in repo.files:
+        source_rel_path = file.relative_path.replace("\\", "/")
+        ext = source_rel_path.split('.')[-1]
+        lang = 'python' if ext == 'py' else 'typescript' if ext in ('ts', 'tsx') else 'javascript'
+        
+        for imp in (file.imports or []):
+            module_name = imp.get("module")
+            if module_name:
+                target_rel_path = resolver.resolve(module_name, source_rel_path, lang)
+                if target_rel_path:
+                    # Prevent duplicates just in case
+                    edges.append(schemas.ArchitectureEdgeSchema(
+                        id=f"e-{source_rel_path}-{target_rel_path}",
+                        source=source_rel_path,
+                        target=target_rel_path,
+                        animated=True
+                    ))
+                    
+    # Deduplicate edges
+    unique_edges = {e.id: e for e in edges}.values()
+    return list(unique_edges)
 
 
 @router.get("/files/tree", response_model=schemas.FileNodeSchema)
