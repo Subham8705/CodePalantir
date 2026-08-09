@@ -148,6 +148,13 @@ def get_modules(db: Session = Depends(get_db)):
     result = []
     author_id_map = _get_author_id_map(repo)
     
+    # Calculate dependents (reverse dependencies)
+    dependents_map = {mod.id: [] for mod in repo.modules}
+    for mod in repo.modules:
+        for dep in (mod.dependencies or []):
+            if dep in dependents_map and mod.id not in dependents_map[dep]:
+                dependents_map[dep].append(mod.id)
+                
     for mod in repo.modules:
         # Calculate real ownership percentages
         ownership = {}
@@ -160,19 +167,36 @@ def get_modules(db: Session = Depends(get_db)):
                 if author_id is not None:
                     ownership[author_id] = round((lines / total_lines) * 100)
                     
+        # Determine primary contributors (top 2 by ownership)
+        primary_contributors = []
+        if ownership:
+            sorted_owners = sorted(ownership.items(), key=lambda x: x[1], reverse=True)
+            primary_contributors = [author_id for author_id, pct in sorted_owners[:2]]
+        elif mod.primary_owner:
+            owner_id = author_id_map.get(mod.primary_owner)
+            if owner_id:
+                primary_contributors = [owner_id]
+                
+        # Generate dynamic explanation
+        core_name = mod.core_file.split('/')[-1] if mod.core_file else "multiple files"
+        deps_count = len(mod.dependencies or [])
+        deps_text = f" It relies on {deps_count} other module{'s' if deps_count != 1 else ''} to function." if deps_count > 0 else " It operates independently with no external module dependencies."
+        layer = get_layer(mod.name)
+        ai_explanation = f"This {layer} layer module encapsulates {mod.name.replace('_', ' ')} logic, centered around `{core_name}`.{deps_text}"
+                    
         result.append(schemas.ModuleSchema(
             id=mod.id,
             name=mod.name,
-            description=f"Core file: {mod.core_file}" if mod.core_file else "Architecture Module",
-            layer=get_layer(mod.name),
+            description=f"Core orchestrator: {mod.core_file}" if mod.core_file else f"{layer} Architecture Module",
+            layer=layer,
             fileCount=len(mod.files) if mod.files else 0,
             dependencies=mod.dependencies if mod.dependencies else [],
-            dependents=[],
-            primaryContributors=[mod.primary_owner] if mod.primary_owner else [],
+            dependents=dependents_map.get(mod.id, []),
+            primaryContributors=primary_contributors,
             files=[],
             ownership=ownership,
             color="#3178C6",
-            aiExplanation="This module handles core logic."
+            aiExplanation=ai_explanation
         ))
     return result
 
