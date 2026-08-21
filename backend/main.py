@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import repo, parse, data
+from api.routes import repo, parse, data, ai
 from database.database import Base, engine
 
 # Ensure tables are created
@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(repo.router, prefix="/api/repo", tags=["Repository"])
 app.include_router(parse.router, prefix="/api/parse", tags=["Parsing"])
 app.include_router(data.router, prefix="/api", tags=["Data"])
+app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
 
 @app.get("/")
 def read_root():
