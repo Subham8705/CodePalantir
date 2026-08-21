@@ -6,17 +6,17 @@ export default {
       colors: {
         // Base backgrounds
         bg: {
-          base: '#080B12',
-          DEFAULT: '#0D1117',
-          elevated: '#111827',
-          card: '#161B22',
-          hover: '#1C2230',
+          base: 'rgb(var(--bg-base) / <alpha-value>)',
+          DEFAULT: 'rgb(var(--bg-default) / <alpha-value>)',
+          elevated: 'rgb(var(--bg-elevated) / <alpha-value>)',
+          card: 'rgb(var(--bg-card) / <alpha-value>)',
+          hover: 'rgb(var(--bg-hover) / <alpha-value>)',
         },
         // Borders
         border: {
-          DEFAULT: '#21262D',
-          subtle: '#1A1F27',
-          strong: '#2D333B',
+          DEFAULT: 'rgb(var(--border-default) / <alpha-value>)',
+          subtle: 'rgb(var(--border-subtle) / <alpha-value>)',
+          strong: 'rgb(var(--border-strong) / <alpha-value>)',
         },
         // Brand
         primary: {
