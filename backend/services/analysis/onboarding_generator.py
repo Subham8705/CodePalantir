@@ -108,60 +108,32 @@ class OnboardingGenerator:
         lookup: Dict[str, 'ArchitectureModule'],
         strategy: str
     ) -> str:
-        """Generate a context-aware reason for why this module appears at this position."""
+        """Generate factual metadata for why this module is ordered here."""
         dep_names = []
         for dep_id in mod.dependencies:
             dep_mod = lookup.get(dep_id)
             if dep_mod:
                 dep_names.append(dep_mod.name)
         
-        # Identify who depends on this module (dependents)
-        dependent_names = []
-        for other in ordered:
-            if mod.id in other.dependencies:
-                dep_other = lookup.get(other.id)
-                if dep_other:
-                    dependent_names.append(dep_other.name)
-        
         file_count = len(mod.files)
         core = mod.core_file.split("/")[-1] if mod.core_file else None
         
         parts = []
         
-        # Position-based intro
         if idx == 0:
-            if strategy == "bottom_up":
-                parts.append("Start here — this is a foundational module with no internal dependencies.")
-            else:
-                parts.append("Start here — this is a top-level entry point that orchestrates the system.")
-        elif idx <= 2:
-            parts.append("Read this early — it's a low-level building block used by many other modules.")
+            parts.append("• Starting Point: Foundational module")
         
-        # Core file hint
+        parts.append(f"• Size: {file_count} files")
+        
         if core:
-            parts.append(f"Focus on `{core}` as the main entry point ({file_count} file{'s' if file_count != 1 else ''} total).")
-        else:
-            parts.append(f"Contains {file_count} file{'s' if file_count != 1 else ''}.")
-
-        # Dependency reasoning
+            parts.append(f"• Core entry point: {core}")
+            
         if dep_names:
             if len(dep_names) <= 3:
-                names_str = ", ".join(dep_names)
-                parts.append(f"Builds on top of: {names_str}. Read those first to understand how this module works.")
+                parts.append(f"• Dependencies: {', '.join(dep_names)}")
             else:
-                names_str = ", ".join(dep_names[:3])
-                parts.append(f"Depends on {len(dep_names)} modules including {names_str}.")
+                parts.append(f"• Dependencies: {len(dep_names)} modules")
         else:
-            if idx > 0:
-                parts.append("This is a standalone module with no internal dependencies — safe to read independently.")
-        
-        # Why it matters (dependents)
-        if dependent_names:
-            if len(dependent_names) <= 3:
-                dep_str = ", ".join(dependent_names)
-                parts.append(f"Understanding this unlocks: {dep_str}.")
-            else:
-                dep_str = ", ".join(dependent_names[:2])
-                parts.append(f"Critical module — {len(dependent_names)} other modules depend on it, including {dep_str}.")
-        
-        return " ".join(parts)
+            parts.append("• Dependencies: None (Standalone)")
+            
+        return "\n".join(parts)

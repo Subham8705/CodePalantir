@@ -125,7 +125,7 @@ export function OnboardingPage() {
                       <div className="flex items-start justify-between gap-3 mb-2">
                         <div>
                           <h3 className="text-base font-semibold text-white">{step.title}</h3>
-                          <p className="text-sm text-gray-400 mt-0.5">{step.description}</p>
+                          <p className="text-sm text-gray-400 mt-1 whitespace-pre-line">{step.description}</p>
                         </div>
                         {step.completed && <Badge variant="success"><Check size={11} /> Complete</Badge>}
                       </div>
@@ -172,7 +172,10 @@ export function OnboardingPage() {
                         >
                           {step.completed ? <><Circle size={13} /> Mark Incomplete</> : <><CheckCircle size={13} /> Mark Complete</>}
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => navigate('/app/assistant')}>
+                        <Button variant="ghost" size="sm" onClick={() => {
+                          const prompt = `Please explain the ${module?.name || step.title} module. Its core file is ${module?.files[0]?.name || 'unknown'}. What is its purpose?`;
+                          navigate('/app/assistant', { state: { initialPrompt: prompt } });
+                        }}>
                           <Bot size={13} /> Explain with AI
                         </Button>
                       </div>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bot, Send, Copy, RefreshCw, Sparkles, User, FileCode,
@@ -126,23 +126,39 @@ export function AssistantPage() {
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'ok' | 'error'>('checking');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Track whether user is near the bottom
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const threshold = 100; // px from bottom
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  };
+
+  // Smart auto-scroll: only scroll if user is already at bottom
+  useEffect(() => {
+    if (isAtBottomRef.current && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // Always scroll to bottom when a new user message is sent
+  const scrollToBottom = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      isAtBottomRef.current = true;
+    }
+  };
 
   // Check Ollama status on mount
   useEffect(() => {
     fetch(`${API_BASE}/models`)
       .then(r => r.json())
-      .then(data => {
-        setOllamaStatus(data.error ? 'error' : 'ok');
-      })
+      .then(data => setOllamaStatus(data.error ? 'error' : 'ok'))
       .catch(() => setOllamaStatus('error'));
   }, []);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   const handleSend = async (question?: string) => {
     const text = question || input.trim();
@@ -167,6 +183,7 @@ export function AssistantPage() {
     setMessages(prev => [...prev, userMsg, assistantMsg]);
     setInput('');
     setStreaming(true);
+    scrollToBottom(); // always jump to bottom when user sends
 
     // Build conversation history for the API
     const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
@@ -236,6 +253,18 @@ export function AssistantPage() {
       abortRef.current = null;
     }
   };
+
+  // Handle initial prompt from navigation state
+  const location = useLocation();
+  const initialPromptProcessed = useRef(false);
+  useEffect(() => {
+    if (location.state?.initialPrompt && !initialPromptProcessed.current) {
+      initialPromptProcessed.current = true;
+      handleSend(location.state.initialPrompt);
+      // clear state so it doesn't re-trigger on refresh
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state]);
 
   const handleStop = () => {
     abortRef.current?.abort();
@@ -333,7 +362,7 @@ export function AssistantPage() {
       </div>
 
       {/* Chat messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-3xl mx-auto space-y-6">
           <AnimatePresence initial={false}>
             {messages.map((msg) => (

@@ -26,7 +26,7 @@ class ChatRequest(BaseModel):
     model: str = DEFAULT_MODEL
 
 
-def build_system_prompt(db: Session) -> str:
+def build_system_prompt(db: Session, user_query: str = "") -> str:
     """Build a rich system prompt injecting real repository context."""
     try:
         repo = db.query(models.RepositoryModel).order_by(models.RepositoryModel.id.desc()).first()
@@ -50,14 +50,21 @@ def build_system_prompt(db: Session) -> str:
             for e, c in sorted(ext_counts.items(), key=lambda x: -x[1])[:5]
         )
 
-        # Module summary
+        # Module summary WITH actual file lists
         module_summaries = []
         for mod in repo.modules[:15]:
             dep_count = len(mod.dependencies) if mod.dependencies else 0
-            file_count = len(mod.files) if mod.files else 0
+            file_list = ", ".join((f.split('/')[-1] for f in (mod.files or [])[:8]))
             core = mod.core_file.split('/')[-1] if mod.core_file else "N/A"
-            module_summaries.append(f"  - {mod.name}: {file_count} files, core={core}, {dep_count} dependencies")
+            module_summaries.append(
+                f"  - {mod.name} (core={core}, {dep_count} deps)\n"
+                f"    Files: {file_list or 'N/A'}"
+            )
         modules_text = "\n".join(module_summaries)
+
+        # Complete flat file list (so AI knows every file that exists)
+        all_files = sorted([f.relative_path.replace('\\', '/') for f in repo.files])
+        file_list_text = "\n".join(f"  {fp}" for fp in all_files[:80])
 
         # Ownership
         owner_stats: dict = {}
@@ -67,9 +74,37 @@ def build_system_prompt(db: Session) -> str:
         top_owners = sorted(owner_stats.items(), key=lambda x: -x[1])[:5]
         owners_text = ", ".join(f"{name} ({count} files)" for name, count in top_owners)
 
+        # Dynamic Content Injection: if user mentions a file in query
+        dynamic_context = ""
+        if user_query:
+            mentioned_files = []
+            for f in repo.files:
+                filename = f.relative_path.split('/')[-1]
+                # Check if either the full path or just the filename is in the query
+                if f.relative_path in user_query or filename in user_query:
+                    mentioned_files.append(f)
+            
+            # Limit to 3 files to avoid context window explosion
+            for f in mentioned_files[:3]:
+                dynamic_context += f"\n=== CONTENT OF {f.relative_path} ===\n"
+                
+                # Read actual file from cloned_repos
+                file_path = os.path.join("cloned_repos", repo.name, f.relative_path)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as file_handle:
+                        content = file_handle.read()
+                        # Truncate if it's absurdly large
+                        if len(content) > 10000:
+                            content = content[:10000] + "\n... (truncated)"
+                        dynamic_context += content
+                except Exception as e:
+                    dynamic_context += f"(Could not read file: {e})"
+                    
+                dynamic_context += "\n=========================================\n"
+
         prompt = f"""You are CodePalantir AI, an intelligent assistant embedded inside the CodePalantir repository analysis tool.
 
-You have deep knowledge of the analyzed repository. Use this context to give precise, accurate answers.
+You have been given the EXACT structure of the analyzed repository. Use ONLY this data — do NOT guess or invent file contents, module names, or behaviors not listed here.
 
 === REPOSITORY CONTEXT ===
 Repository: {repo_name}
@@ -78,22 +113,26 @@ Total Modules: {total_modules}
 Languages: {langs}
 Top Contributors (by files owned): {owners_text}
 
-=== MODULE ARCHITECTURE ===
+=== MODULE ARCHITECTURE (with actual files) ===
 {modules_text}
 
+=== ALL FILES IN REPOSITORY ===
+{file_list_text}
+
+{dynamic_context}
+
+=== IMPORTANT RULES ===
+- ONLY refer to files and modules listed above. Never invent file names.
+- If asked about a specific file's content that isn't in this context, say: "I can see this file exists but I don't have its content loaded. Based on its name and module context, here's what I can infer..."
+- Be honest when you are inferring vs when you know for certain.
+- Use markdown formatting (bold, code blocks, lists) for clarity.
+
 === YOUR CAPABILITIES ===
-- Explain module responsibilities and architecture decisions
+- Explain module responsibilities based on their actual files
 - Identify which files/modules handle specific features
 - Suggest who to talk to for different parts of the codebase
 - Give onboarding guidance for new developers
 - Explain code dependencies and data flow
-- Identify potential areas of technical debt or risk
-
-=== RULES ===
-- Always base answers on the repository data above
-- If you don't know something specific, say so honestly
-- Keep answers concise but complete
-- Use markdown formatting for code, lists and emphasis
 - When mentioning file paths or module names, use backtick formatting
 - Do NOT make up file names or module names that aren't in the context
 """
@@ -132,7 +171,12 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
             detail="Ollama is not running. Please start it with: ollama serve"
         )
 
-    system_prompt = build_system_prompt(db)
+    # Get the last user message to check for file mentions
+    last_user_msg = ""
+    if request.messages and request.messages[-1].role == "user":
+        last_user_msg = request.messages[-1].content
+
+    system_prompt = build_system_prompt(db, user_query=last_user_msg)
 
     # Build the messages array for Ollama
     ollama_messages = [{"role": "system", "content": system_prompt}]
