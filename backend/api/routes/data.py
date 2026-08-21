@@ -332,38 +332,63 @@ def get_onboarding_path(db: Session = Depends(get_db)):
 @router.get("/contributors", response_model=List[schemas.ContributorSchema])
 def get_contributors(db: Session = Depends(get_db)):
     repo = get_latest_repo(db)
-    
-    # Aggregate author stats
+    import subprocess
+
+    # Step 1: Get exact commit counts per author from git
+    repo_path = f"cloned_repos/{repo.name.split('/')[-1] if '/' in repo.name else repo.name}"
+    exact_commits = {}
+    if os.path.exists(repo_path):
+        try:
+            cmd = ['git', '-C', repo_path, 'shortlog', '-sn', '--all']
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            for line in result.stdout.strip().split('\n'):
+                if line:
+                    parts = line.strip().split('\t')
+                    if len(parts) == 2:
+                        exact_commits[parts[1].strip()] = int(parts[0].strip())
+        except Exception:
+            pass
+
+    # Step 2: Aggregate lines, files touched and primary areas from git blame data
     authors = {}
+    total_lines = 0
     for f in repo.files:
         if f.author_lines:
             for author, lines in f.author_lines.items():
                 if author not in authors:
-                    authors[author] = {"commits": 0, "lines": 0}
+                    authors[author] = {"lines": 0, "files_touched": 0, "directories": {}}
                 authors[author]["lines"] += lines
-                
-    # Aggregate commits (using churn as a proxy)
-    for f in repo.files:
-        if f.primary_owner and f.primary_owner in authors:
-            authors[f.primary_owner]["commits"] += f.churn_count
-            
+                authors[author]["files_touched"] += 1
+                # Extract top-level directory as primary area
+                parts = f.relative_path.replace('\\', '/').split('/')
+                dir_name = parts[0] if len(parts) > 1 else "Root"
+                authors[author]["directories"][dir_name] = authors[author]["directories"].get(dir_name, 0) + 1
+                total_lines += lines
+
     result = []
-    # Sort by lines
     sorted_authors = sorted(authors.items(), key=lambda x: x[1]["lines"], reverse=True)
-    
+
     for idx, (name, stats) in enumerate(sorted_authors[:10]):
+        # Top 2 directories = primary areas
+        sorted_dirs = sorted(stats["directories"].items(), key=lambda x: x[1], reverse=True)
+        primary_areas = [d for d, _ in sorted_dirs[:2]] or ["Core"]
+
+        pct = round((stats["lines"] / total_lines) * 100) if total_lines > 0 else 0
+        commits = exact_commits.get(name, 0)
+
         result.append(schemas.ContributorSchema(
             id=str(idx),
             name=name,
             avatar=name[:2].upper() if name else "?",
             role="Contributor",
-            commits=stats["commits"],
-            filesTouched=1, # Mock
-            contributionPct=10, # Mock
-            primaryAreas=["Authentication", "API"], # Mock
-            recentActivity=[] # Mock empty list
+            commits=commits,
+            filesTouched=stats["files_touched"],
+            contributionPct=pct,
+            primaryAreas=primary_areas,
+            recentActivity=[]
         ))
     return result
+
 
 
 @router.get("/architecture/nodes", response_model=List[schemas.ArchitectureNodeSchema])
