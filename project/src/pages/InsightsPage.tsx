@@ -55,42 +55,51 @@ export function InsightsPage() {
     fill: ['#3B82F6', '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B'][idx % 5],
   }));
 
+  const totalFiles = mockRepository?.files?.length || 0;
+  const numDirs = new Set((mockRepository?.files || []).map(f => f.path.split('/').slice(0, -1).join('/'))).size;
+  const uniqueLayers = new Set(mockModules.map(m => m.layer)).size;
+  const totalModules = mockModules.length;
+  const moduleDependenciesCount = mockModules.reduce((acc, m) => acc + (m.dependencies?.length || 0), 0);
+  const activeContributors = mockContributors.length;
+  const sharedOwnershipModules = mockModules.filter(m => Object.keys(m.ownership || {}).length > 1).length;
+  const singleOwnershipModules = mockModules.filter(m => Object.keys(m.ownership || {}).length === 1).length;
+  const totalOnboardingSteps = mockOnboardingSteps.length || totalModules;
+
   const sections = [
     {
       title: 'Repository Structure',
       icon: FileCode,
       stats: [
-        { label: 'Files by directory', value: '247', sub: 'across 8 directories' },
-        { label: 'Modules by layer', value: '5 layers', sub: 'Frontend to Database' },
-        { label: 'Dependency distribution', value: '89', sub: 'internal connections' },
+        { label: 'Total files', value: totalFiles.toString(), sub: `across ${numDirs || 1} directories` },
+        { label: 'Modules by layer', value: `${uniqueLayers} layers`, sub: 'Organized hierarchy' },
+        { label: 'Module dependencies', value: moduleDependenciesCount.toString(), sub: 'inter-module connections' },
       ],
     },
     {
       title: 'Architecture',
       icon: Network,
       stats: [
-        { label: 'Number of layers', value: '5', sub: 'clear separation' },
-        { label: 'Number of modules', value: '32', sub: '10 major + 22 minor' },
-        { label: 'Internal dependencies', value: '88', sub: 'within the codebase' },
-        { label: 'External dependencies', value: '1', sub: 'Stripe webhook' },
+        { label: 'Number of layers', value: uniqueLayers.toString(), sub: 'clear separation' },
+        { label: 'Number of modules', value: totalModules.toString(), sub: 'major components' },
+        { label: 'Total dependencies', value: moduleDependenciesCount.toString(), sub: 'within the codebase' },
       ],
     },
     {
       title: 'Ownership',
       icon: Users,
       stats: [
-        { label: 'Contributors', value: '14', sub: 'active in last 30 days' },
-        { label: 'Shared ownership', value: '26', sub: 'multi-contributor modules' },
-        { label: 'Single-contributor modules', value: '6', sub: 'knowledge concentrated' },
+        { label: 'Contributors', value: activeContributors.toString(), sub: 'active members' },
+        { label: 'Shared ownership', value: sharedOwnershipModules.toString(), sub: 'multi-contributor modules' },
+        { label: 'Single-contributor modules', value: singleOwnershipModules.toString(), sub: 'knowledge concentrated' },
       ],
     },
     {
       title: 'Onboarding',
       icon: Map,
       stats: [
-        { label: 'Total modules', value: '12', sub: 'in learning path' },
-        { label: 'Estimated onboarding time', value: '2h 35m', sub: 'for full path' },
-        { label: 'Completed modules', value: `${completedSteps} / 12`, sub: 'in progress' },
+        { label: 'Total modules', value: totalModules.toString(), sub: 'in learning path' },
+        { label: 'Estimated onboarding time', value: `${Math.max(1, Math.round(totalModules * 1.2))}h`, sub: 'for full path' },
+        { label: 'Completed modules', value: `${completedSteps} / ${totalOnboardingSteps}`, sub: 'in progress' },
       ],
     },
   ];
