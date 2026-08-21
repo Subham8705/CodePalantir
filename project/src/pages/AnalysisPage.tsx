@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Loader2, Github, Compass, AlertCircle } from 'lucide-react';
 import { Logo } from '@/components/Logo';
+import { useApi } from '@/context/ApiContext';
 
 const pipelineSteps = [
   'Connecting to GitHub',
@@ -20,6 +21,7 @@ const pipelineSteps = [
 export function AnalysisPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { refreshData } = useApi();
   const repoUrl = location.state?.url || '';
   const [currentStep, setCurrentStep] = useState(0);
   const [done, setDone] = useState(false);
@@ -50,7 +52,8 @@ export function AnalysisPage() {
         }
         return res.json();
       })
-      .then(() => {
+      .then(async () => {
+        await refreshData();
         setDone(true);
         setCurrentStep(pipelineSteps.length);
         setTimeout(() => navigate('/app/overview'), 800);
