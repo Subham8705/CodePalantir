@@ -197,7 +197,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
                     }
                 },
                 stream=True,
-                timeout=120
+                timeout=(10, 600)
             )
 
             if not resp.ok:

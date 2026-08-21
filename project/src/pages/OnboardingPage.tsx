@@ -173,7 +173,7 @@ export function OnboardingPage() {
                           {step.completed ? <><Circle size={13} /> Mark Incomplete</> : <><CheckCircle size={13} /> Mark Complete</>}
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => {
-                          const prompt = `Please explain the ${module?.name || step.title} module. Its core file is ${module?.files[0]?.name || 'unknown'}. What is its purpose?`;
+                          const prompt = `Please explain the ${module?.name || step.title} module from a high level. What is its overall purpose?`;
                           navigate('/app/assistant', { state: { initialPrompt: prompt } });
                         }}>
                           <Bot size={13} /> Explain with AI
@@ -299,16 +299,30 @@ export function OnboardingPage() {
                   <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Files to Read</h3>
                   <div className="space-y-2">
                     {selectedStep.files?.map((file, idx) => (
-                      <button
+                      <div
                         key={file}
-                        onClick={() => { setSelectedStepId(null); navigate(`/app/explorer?file=${file}`); }}
-                        className="w-full flex items-center gap-3 p-3 rounded-lg bg-bg-elevated border border-border hover:border-primary-500/50 transition-colors text-left"
+                        className="w-full flex items-center gap-3 p-2 rounded-lg bg-bg-elevated border border-border hover:border-border-strong transition-colors"
                       >
-                        <span className="text-xs font-mono text-gray-600 w-5">{idx + 1}</span>
-                        <BookOpen size={14} className="text-primary-400" />
-                        <span className="text-sm font-mono text-gray-200 flex-1 truncate">{file}</span>
-                        <ChevronRight size={14} className="text-gray-600" />
-                      </button>
+                        <span className="text-xs font-mono text-gray-600 w-5 pl-1">{idx + 1}</span>
+                        <BookOpen size={14} className="text-primary-400 flex-shrink-0" />
+                        <button 
+                          className="text-sm font-mono text-gray-200 flex-1 truncate text-left hover:text-primary-400 transition-colors"
+                          onClick={() => { setSelectedStepId(null); navigate(`/app/explorer?file=${file}`); }}
+                        >
+                          {file}
+                        </button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 px-2 text-xs flex-shrink-0"
+                          onClick={() => {
+                            const prompt = `Please explain the file ${file} in detail. What is its purpose?`;
+                            navigate('/app/assistant', { state: { initialPrompt: prompt } });
+                          }}
+                        >
+                          <Bot size={12} className="text-secondary-400" /> Ask AI
+                        </Button>
+                      </div>
                     ))}
                   </div>
                 </div>

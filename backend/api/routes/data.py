@@ -350,27 +350,32 @@ def get_contributors(db: Session = Depends(get_db)):
             pass
 
     # Step 2: Aggregate lines, files touched and primary areas from git blame data
+    file_to_module = {}
+    for mod in repo.modules:
+        for fpath in mod.files:
+            file_to_module[fpath] = mod.name
+
     authors = {}
     total_lines = 0
     for f in repo.files:
         if f.author_lines:
+            fpath_normalized = f.relative_path.replace('\\', '/')
+            mod_name = file_to_module.get(fpath_normalized, "Unknown")
             for author, lines in f.author_lines.items():
                 if author not in authors:
-                    authors[author] = {"lines": 0, "files_touched": 0, "directories": {}}
+                    authors[author] = {"lines": 0, "files_touched": 0, "modules_touched": {}}
                 authors[author]["lines"] += lines
                 authors[author]["files_touched"] += 1
-                # Extract top-level directory as primary area
-                parts = f.relative_path.replace('\\', '/').split('/')
-                dir_name = parts[0] if len(parts) > 1 else "Root"
-                authors[author]["directories"][dir_name] = authors[author]["directories"].get(dir_name, 0) + 1
+                
+                authors[author]["modules_touched"][mod_name] = authors[author]["modules_touched"].get(mod_name, 0) + 1
                 total_lines += lines
 
     result = []
     sorted_authors = sorted(authors.items(), key=lambda x: x[1]["lines"], reverse=True)
 
     for idx, (name, stats) in enumerate(sorted_authors[:10]):
-        # Top 2 directories = primary areas
-        sorted_dirs = sorted(stats["directories"].items(), key=lambda x: x[1], reverse=True)
+        # Top 2 modules = primary areas
+        sorted_dirs = sorted(stats["modules_touched"].items(), key=lambda x: x[1], reverse=True)
         primary_areas = [d for d, _ in sorted_dirs[:2]] or ["Core"]
 
         pct = round((stats["lines"] / total_lines) * 100) if total_lines > 0 else 0
