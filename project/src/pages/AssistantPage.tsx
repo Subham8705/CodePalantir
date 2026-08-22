@@ -111,14 +111,32 @@ export function AssistantPage() {
   const { mockRepository } = useApi();
   const repoName = mockRepository?.name || 'your repository';
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: `Hello! I'm your CodePalantir AI, powered by **DeepSeek R1** running locally via Ollama.\n\nI have full knowledge of **${repoName}** — its modules, architecture, dependencies, and ownership data. Ask me anything about the codebase!`,
-      timestamp: new Date().toISOString(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem('codepalantir_ai_chat');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // Ignore JSON error
+      }
+    }
+    return [
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: `Hello! I'm your CodePalantir AI, powered by **DeepSeek R1** running locally via Ollama.\n\nI have full knowledge of **${repoName}** — its modules, architecture, dependencies, and ownership data. Ask me anything about the codebase!`,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+  });
+
+  // Save messages to local storage (max 10 to prevent lag)
+  useEffect(() => {
+    // Exclude currently streaming or error messages from being saved
+    const validMessages = messages.filter(m => !m.streaming && !m.error);
+    const recentMessages = validMessages.slice(-10);
+    localStorage.setItem('codepalantir_ai_chat', JSON.stringify(recentMessages));
+  }, [messages]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
