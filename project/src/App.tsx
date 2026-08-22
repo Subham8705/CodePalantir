@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { ApiProvider } from '@/context/ApiContext';
 import { AppLayout } from '@/components/AppLayout';
@@ -19,6 +20,13 @@ export default function App() {
     <ThemeProvider>
       <ApiProvider>
         <BrowserRouter>
+        <Toaster position="bottom-right" toastOptions={{
+          style: {
+            background: '#1a1f2e',
+            color: '#fff',
+            border: '1px solid #2d3548',
+          }
+        }} />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/analyze" element={<AnalysisPage />} />

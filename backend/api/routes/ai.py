@@ -102,6 +102,17 @@ def build_system_prompt(db: Session, user_query: str = "") -> str:
                     
                 dynamic_context += "\n=========================================\n"
 
+        # Semantic Search Context Injection
+        if user_query:
+            try:
+                from services.semantic_search import SemanticSearchService
+                search_service = SemanticSearchService()
+                semantic_results = search_service.search(query=user_query, repo_url=repo.url, top_k=5)
+                if semantic_results:
+                    dynamic_context += semantic_results
+            except Exception as e:
+                dynamic_context += f"\n(Semantic search error: {e})\n"
+
         prompt = f"""You are CodePalantir AI, an intelligent assistant embedded inside the CodePalantir repository analysis tool.
 
 You have been given the EXACT structure of the analyzed repository. Use ONLY this data — do NOT guess or invent file contents, module names, or behaviors not listed here.

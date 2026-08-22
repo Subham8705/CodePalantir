@@ -56,6 +56,14 @@ export function AnalysisPage() {
         await refreshData();
         setDone(true);
         setCurrentStep(pipelineSteps.length);
+        
+        import('react-hot-toast').then(({ toast }) => {
+          toast('Semantic Search is indexing in the background... AI answers may be limited for the next minute.', {
+            icon: '🧠',
+            duration: 10000,
+          });
+        });
+
         setTimeout(() => navigate('/app/overview'), 800);
       })
       .catch((err) => {

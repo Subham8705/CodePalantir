@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Editor from '@monaco-editor/react';
 import {
@@ -100,6 +100,7 @@ function FileTreeNode({ node, depth, selectedId, onSelect, expandedIds, toggleEx
 
 export function ExplorerPage() {
   const { mockFileTree, mockModules, mockContributors } = useApi();
+  const navigate = useNavigate();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(['root', 'src', 'backend', 'components', 'services', 'controllers', 'db']));
@@ -124,8 +125,10 @@ export function ExplorerPage() {
   useEffect(() => {
     if (!selectedFile) return;
     setLoading(true);
+    
+    const API_BASE_URL = 'http://127.0.0.1:8000/api';
     // Fetch file content from backend
-    fetch(`/api/files/content?path=${encodeURIComponent(selectedFile.path)}`)
+    fetch(`${API_BASE_URL}/files/content?path=${encodeURIComponent(selectedFile.path)}`)
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch');
         return res.text();
@@ -268,11 +271,15 @@ export function ExplorerPage() {
               <Button variant="ghost" size="sm" onClick={() => setDepModalOpen(true)}>
                 <Network size={13} /> Dependencies
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  const prompt = `Please explain the file ${selectedFile.name} in detail. What is its purpose?`;
+                  navigate('/app/assistant', { state: { initialPrompt: prompt } });
+                }}
+              >
                 <Bot size={13} /> Explain
-              </Button>
-              <Button variant="ghost" size="sm">
-                <BookPlus size={13} /> Add to Path
               </Button>
             </div>
           )}
@@ -321,10 +328,6 @@ export function ExplorerPage() {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-500">Lines</span>
                 <span className="text-gray-200">{selectedFile.lines || '—'}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">Last modified</span>
-                <span className="text-gray-200 flex items-center gap-1"><Clock size={10} /> {selectedFile.lastModified || 'Recent'}</span>
               </div>
             </div>
           </div>
